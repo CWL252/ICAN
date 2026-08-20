@@ -84,17 +84,6 @@ class PhaseJobManager:
             return None
         return self._public_job(job)
 
-    def save_annotations(self, job_id, annotations):
-        with self._lock:
-            job = self._read_job_file(job_id)
-            if not job:
-                return None
-
-            job["annotations"] = annotations
-            job["updatedAt"] = self._now()
-            self._write_job_locked(job)
-            return self._public_job(job)
-
     def _run_job(self, job_id):
         job = self._load_job(job_id)
         if not job:
@@ -116,47 +105,32 @@ class PhaseJobManager:
                     progress,
                 ),
             )
-            self._finalize_job(job_id, "completed", "completed", "分析完成", "关键步骤分析完成。", 100, result=result)
+            job["status"] = "completed"
+            job["stage"] = "completed"
+            job["stageLabel"] = "分析完成"
+            job["message"] = "关键步骤分析完成。"
+            job["progress"] = 100
+            job["result"] = result
+            job["updatedAt"] = self._now()
+            self._save_job(job)
         except Exception as exc:  # noqa: BLE001
-            self._finalize_job(
-                job_id,
-                "failed",
-                "failed",
-                "分析失败",
-                str(exc),
-                job.get("progress", 0),
-                error=str(exc),
-            )
-
-    def _finalize_job(self, job_id, status, stage, stage_label, message, progress, result=None, error=None):
-        with self._lock:
-            latest = self._read_job_file(job_id)
-            if latest is None:
-                return
-            latest["status"] = status
-            latest["stage"] = stage
-            latest["stageLabel"] = stage_label
-            latest["message"] = message
-            latest["progress"] = progress
-            if result is not None:
-                latest["result"] = result
-            if error is not None:
-                latest["error"] = error
-            latest["updatedAt"] = self._now()
-            self._write_job_locked(latest)
+            job["status"] = "failed"
+            job["stage"] = "failed"
+            job["stageLabel"] = "分析失败"
+            job["message"] = str(exc)
+            job["progress"] = job.get("progress", 0)
+            job["error"] = str(exc)
+            job["updatedAt"] = self._now()
+            self._save_job(job)
 
     def _update_job_progress(self, job, status, stage, stage_label, message, progress):
-        with self._lock:
-            # 重新读取最新状态再更新，避免用旧快照覆盖已保存的标注
-            latest = self._read_job_file(job["jobId"])
-            target = latest if latest is not None else job
-            target["status"] = status
-            target["stage"] = stage
-            target["stageLabel"] = stage_label
-            target["message"] = message
-            target["progress"] = progress
-            target["updatedAt"] = self._now()
-            self._write_job_locked(target)
+        job["status"] = status
+        job["stage"] = stage
+        job["stageLabel"] = stage_label
+        job["message"] = message
+        job["progress"] = progress
+        job["updatedAt"] = self._now()
+        self._save_job(job)
 
     def _get_service(self):
         if self.service:
@@ -175,27 +149,18 @@ class PhaseJobManager:
     def _job_file(self, job_id):
         return self.jobs_dir / f"{job_id}.json"
 
-    def _read_job_file(self, job_id):
+    def _load_job(self, job_id):
         job_file = self._job_file(job_id)
         if not job_file.exists():
             return None
         with job_file.open("r", encoding="utf-8") as file:
             return json.load(file)
 
-    def _load_job(self, job_id):
-        with self._lock:
-            return self._read_job_file(job_id)
-
-    def _write_job_locked(self, job):
-        job_file = self._job_file(job["jobId"])
-        tmp_file = job_file.with_suffix(".json.tmp")
-        with tmp_file.open("w", encoding="utf-8") as file:
-            json.dump(job, file, ensure_ascii=False, indent=2)
-        tmp_file.replace(job_file)  # 原子替换，避免并发读截断
-
     def _save_job(self, job):
         with self._lock:
-            self._write_job_locked(job)
+            job_file = self._job_file(job["jobId"])
+            with job_file.open("w", encoding="utf-8") as file:
+                json.dump(job, file, ensure_ascii=False, indent=2)
 
     def _public_job(self, job):
         return {
@@ -211,7 +176,6 @@ class PhaseJobManager:
             "updatedAt": job.get("updatedAt"),
             "result": job.get("result"),
             "error": job.get("error"),
-            "annotations": job.get("annotations"),
         }
 
     @staticmethod

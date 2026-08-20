@@ -23,12 +23,11 @@ class PhaseModel:
                 param.requires_grad = False
 
         if not self.image_based and cnn_weight_path.exists():
-            # 旧格式权重（含 numpy 对象），PyTorch 2.6+ 默认 weights_only=True 会拒绝加载
-            checkpoint = torch.load(cnn_weight_path, map_location=self.device, weights_only=False)
+            checkpoint = torch.load(cnn_weight_path, map_location=self.device)
             self.net.cnn.load_state_dict(checkpoint["state_dict"])
 
         if head_weight_path.exists():
-            checkpoint = torch.load(head_weight_path, map_location=self.device, weights_only=False)
+            checkpoint = torch.load(head_weight_path, map_location=self.device)
             self.net.load_state_dict(checkpoint["state_dict"])
 
         self.net.eval()

@@ -19,9 +19,6 @@
         <button class="btn-secondary" @click="exportAnnotations">
           <i class="fas fa-share-alt mr-2"></i>导出标注
         </button>
-        <button class="btn-secondary" @click="exportStepAnnotations">
-          <i class="fas fa-file-export mr-2"></i>导出步骤标注
-        </button>
         <button class="btn-secondary" :class="isTracking ? 'btn-active' : ''" @click="toggleTracking">
           <i class="fas fa-broadcast-tower mr-2"></i>实时追踪: {{ isTracking ? '开' : '关' }}
         </button>
@@ -34,7 +31,7 @@
     <div class="analysis-workspace-card bg-white rounded-lg shadow-md p-6">
       <div class="analysis-main-grid">
         <div class="analysis-video-column space-y-4">
-          <div class="video-container" ref="videoContainer" @click="onVideoContainerClick">
+          <div class="video-container" ref="videoContainer">
             <video
               ref="videoEl"
               :src="uploadedVideoUrl"
@@ -45,7 +42,8 @@
               @loadedmetadata="onLoadedMetadata"
               @canplay="setCanvasSize"
               @timeupdate="onTimeUpdate"
-                            v-show="uploadedVideoUrl"
+              @click.stop.prevent="toggleVideoPlayback"
+              v-show="uploadedVideoUrl"
             ></video>
             <img :src="analysisImageSrc" alt="手术视频" class="w-full h-full object-contain" v-show="!uploadedVideoUrl" />
             <canvas ref="maskCanvas" class="mask-canvas"></canvas>
@@ -89,11 +87,7 @@
           </div>
 
           <div class="timeline-shell">
-            <div
-              class="timeline-bar playhead-bar"
-              ref="playheadTrackRef"
-              @pointerdown.prevent="onPlayheadDown"
-            >
+            <div class="timeline-bar">
               <div class="h-full bg-blue-600 progress" :style="{ width: progressPercent }"></div>
               <span
                 v-for="note in notesSorted"
@@ -102,69 +96,10 @@
                 :style="{ left: markerLeft(note.time) }"
                 :title="formatTimeLabel(note.time) + ' ' + note.text"
               ></span>
-              <div
-                class="playhead-handle"
-                :style="{ left: markerLeft(currentTime) }"
-                title="拖动播放头定位"
-              ></div>
             </div>
             <div class="flex justify-between mt-2 text-sm text-gray-600">
               <span>00:00</span>
               <span>{{ formatTimeLabel(duration || 165) }}</span>
-            </div>
-
-            <div class="segment-track ai-track">
-              <span class="track-label">AI 识别</span>
-              <div v-if="!originalSegmentsRef.length" class="segment-track-empty">
-                AI 尚未识别出步骤
-              </div>
-              <template v-else>
-                <div
-                  v-for="seg in originalSegmentsRef"
-                  :key="seg.id"
-                  class="segment-block ai-block"
-                  :style="{ left: segLeft(seg), width: segWidth(seg), background: segColor(seg) }"
-                  @click="playAiSegment(seg)"
-                >
-                  <span class="segment-label">{{ seg.phaseLabel || seg.title }}</span>
-                </div>
-                <div class="segment-playhead" :style="{ left: markerLeft(currentTime) }"></div>
-              </template>
-            </div>
-
-            <div class="segment-track edit-track" ref="segmentTrackRef" @pointerdown="onEditTrackPointerDown" @click="addSegmentAtTrackClick">
-              <span class="track-label edit">人工标注</span>
-              <div v-if="!editedSegments.length" class="segment-track-empty">
-                AI 结果会自动放入此轨，也可点击空白处手动添加标注
-              </div>
-              <template v-else>
-                <div
-                  v-for="seg in editedSegments"
-                  :key="seg.id"
-                  class="segment-block"
-                  :class="{ selected: selectedSegmentId === seg.id }"
-                  :style="{ left: segLeft(seg), width: segWidth(seg), background: segColor(seg) }"
-                  @click="selectAndPlaySegment(seg)"
-                >
-                  <span class="segment-label">{{ seg.phaseLabel || seg.title }}</span>
-                  <div
-                    class="segment-handle left"
-                    @pointerdown.stop.prevent="startBoundaryDrag($event, seg, 'left')"
-                  ></div>
-                  <div
-                    class="segment-handle right"
-                    @pointerdown.stop.prevent="startBoundaryDrag($event, seg, 'right')"
-                  ></div>
-                  <div
-                    v-if="dragState && dragState.segId === seg.id"
-                    class="segment-time-tip"
-                    :style="dragState.side === 'left' ? 'left: 0' : 'right: 0'"
-                  >
-                    {{ formatTimeLabel(dragState.value) }}
-                  </div>
-                </div>
-                <div class="segment-playhead" :style="{ left: markerLeft(currentTime) }"></div>
-              </template>
             </div>
           </div>
 
@@ -198,7 +133,6 @@
                 <div
                   v-for="note in notesSorted"
                   :key="note.id"
-                  :id="'note-row-' + note.id"
                   class="note-row"
                   :class="activeLoopNoteId === note.id ? 'active-loop' : ''"
                   @click="playNoteLoop(note)"
@@ -255,16 +189,10 @@
                     {{ currentProject?.status || '待分析' }}
                   </span>
                 </div>
-                <div class="flex justify-between items-center gap-3 text-sm">
-  <span class="text-gray-500 whitespace-nowrap">视频文件</span>
-
-  <span
-    class="font-semibold text-slate-800 text-right max-w-[65%] whitespace-nowrap overflow-hidden text-ellipsis"
-    :title="currentProject?.fileName || '未上传'"
-  >
-    {{ currentProject?.fileName || '未上传' }}
-  </span>
-</div>
+                <div class="flex justify-between items-center text-sm">
+                  <span class="text-gray-500">视频文件</span>
+                  <span class="font-semibold text-slate-800 break-all text-right max-w-[65%]">{{ currentProject?.fileName || '未上传' }}</span>
+                </div>
               </div>
             </div>
 
@@ -304,29 +232,17 @@
                 </div>
               </div>
               <div class="overview-status-card overview-card-wide">
-  <div class="overview-status-main">
-    <div class="overview-icon warning">
-      <i class="fas fa-triangle-exclamation"></i>
-    </div>
-
-    <div class="overview-status-content">
-      <div class="overview-status-heading">
-        <p class="text-sm text-gray-500">异常检测</p>
-
-        <p
-          class="font-bold"
-          :class="anomalyStatus.toneClass"
-        >
-          {{ anomalyStatus.label }}
-        </p>
-      </div>
-
-      <p class="overview-status-description">
-        将由独立异常模型提供
-      </p>
-    </div>
-  </div>
-</div>
+                <div class="overview-status-main">
+                  <div class="overview-icon warning"><i class="fas fa-triangle-exclamation"></i></div>
+                  <div>
+                    <p class="text-sm text-gray-500">异常检测</p>
+                    <p class="font-bold" :class="anomalyStatus.toneClass">
+                      {{ anomalyStatus.label }}
+                    </p>
+                  </div>
+                </div>
+                <p class="text-xs text-slate-400">将由独立异常模型提供</p>
+              </div>
             </div>
           </div>
 
@@ -387,21 +303,9 @@
                   任务状态：{{ phaseStatusLabel }}
                 </p>
               </div>
-              <button
-                class="btn-secondary phase-action-btn"
-                :disabled="annotationsSaving || !editedSegments.length"
-                @click="saveAnnotationsToBackend"
-              >
-                <i class="fas fa-save mr-1"></i>
-                <span class="phase-action-text">保存<br>标注</span>
-              </button>
-              <button class="btn-secondary phase-action-btn" :disabled="phaseLoading || isPhaseRunning" @click="runPhaseAnalysis">
+              <button class="btn-secondary" :disabled="phaseLoading || isPhaseRunning" @click="runPhaseAnalysis">
                 <i class="fas" :class="phaseLoading ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'"></i>
-                <span class="phase-action-text">
-                  <template v-if="phaseLoading">提交<br>中</template>
-                  <template v-else-if="isPhaseRunning">分析<br>中</template>
-                  <template v-else>开始<br>分析</template>
-                </span>
+                <span class="ml-2">{{ phaseLoading ? '提交中' : isPhaseRunning ? '分析中' : '开始分析' }}</span>
               </button>
             </div>
 
@@ -435,38 +339,11 @@
             </div>
 
             <div v-else class="phase-steps-list">
-              <div v-if="selectedSegment" class="segment-edit-bar">
-                <span class="segment-edit-title">
-                  <i class="fas fa-sliders mr-1"></i>编辑片段：{{ selectedSegment.phaseLabel }}
-                </span>
-                <select class="input phase-select" v-model="editPhaseKey">
-                  <option v-for="opt in PHASE_OPTIONS" :key="opt.key" :value="opt.key">
-                    {{ opt.label }}
-                  </option>
-                </select>
-                <button class="seg-mini" @click="addSegmentAtPlayhead">
-                  <i class="fas fa-plus mr-1"></i>添加片段
-                </button>
-                <button class="seg-mini" @click="splitSelectedSegment">
-                  <i class="fas fa-scissors mr-1"></i>按播放头拆分
-                </button>
-                <button class="seg-mini danger" @click="deleteSelectedSegment">
-                  <i class="fas fa-trash mr-1"></i>删除片段
-                </button>
-              </div>
-              <div
-                v-for="(step, index) in generatedSteps"
-                :key="step.id"
-                class="phase-step-row"
-                :class="{ 'step-selected': selectedSegmentId === step.id }"
-                @click="selectedSegmentId = step.id"
-              >
+              <div v-for="(step, index) in generatedSteps" :key="step.id" class="phase-step-row">
                 <div class="phase-step-index">{{ index + 1 }}</div>
                 <div class="phase-step-body">
-                  <div class="flex items-center gap-2 flex-wrap">
+                  <div class="flex items-center gap-3 flex-wrap">
                     <h3 class="font-medium">{{ step.title }}</h3>
-                    <span v-if="step.edited" class="text-xs rounded-full px-2 py-1 bg-blue-100 text-blue-700">已修正</span>
-                    <span v-else class="text-xs rounded-full px-2 py-1 bg-slate-100 text-slate-600">AI</span>
                     <span class="text-xs rounded-full px-2 py-1 bg-slate-100 text-slate-600">
                       置信度 {{ formatConfidence(step.confidence) }}
                     </span>
@@ -479,24 +356,7 @@
                     </span>
                   </div>
                 </div>
-                <div class="phase-step-actions">
-                  <button class="phase-step-delete" title="删除该片段" @click.stop="deleteSegmentById(step.id)">
-                    <i class="fas fa-trash"></i>
-                  </button>
-                  <button class="phase-step-play" @click.stop="seekTo(step.seconds)"><i class="fas fa-play"></i></button>
-                </div>
-              </div>
-              <div class="flex gap-2 mt-2">
-                <button class="btn-secondary compact" @click="addSegmentAtPlayhead">
-                  <i class="fas fa-plus mr-1"></i>添加片段
-                </button>
-                <button
-                  class="btn-secondary compact"
-                  :disabled="!originalSegmentsRef.length"
-                  @click="restoreAiSegments"
-                >
-                  <i class="fas fa-rotate-left mr-1"></i>恢复 AI 原始
-                </button>
+                <button class="phase-step-play" @click="seekTo(step.seconds)"><i class="fas fa-play"></i></button>
               </div>
             </div>
           </div>
@@ -556,8 +416,7 @@
               <div class="report-section">
                 <h4>关键步骤</h4>
                 <div v-if="generatedSteps.length" class="report-list">
-                  <!-- 报告里列出全部关键步骤（含用户手动添加/编辑的片段），不再截断前 4 个 -->
-                  <div v-for="step in generatedSteps" :key="step.id" class="report-list-row">
+                  <div v-for="step in generatedSteps.slice(0, 4)" :key="step.id" class="report-list-row">
                     <span>{{ step.time }}</span>
                     <p>{{ step.title }}</p>
                   </div>
@@ -571,7 +430,7 @@
                   {{ instrumentStatsMessage || '正在统计器械使用频率...' }}
                 </div>
                 <div v-else-if="instrumentStats.length" class="report-list">
-                  <div v-for="item in instrumentStats" :key="item.key" class="report-list-row">
+                  <div v-for="item in instrumentStats.slice(0, 4)" :key="item.key" class="report-list-row">
                     <span>{{ formatTimeLabel(item.seconds) }}</span>
                     <p>{{ item.label }}</p>
                   </div>
@@ -632,14 +491,9 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { askDoubao } from '../api/chat'
-import { segmentFrame } from '../api/segment'
-import {
-  createPhaseAnalysisJob,
-  getPhaseAnalysisJob,
-  savePhaseAnnotations,
-} from '../api/phaseAnalysis'
+import { createPhaseAnalysisJob, getPhaseAnalysisJob } from '../api/phaseAnalysis'
 import { applyPhaseAnalysisToProject, syncProjectPhaseAnalysis } from '../phaseAnalysisStore'
 import { getActiveProject, saveProject, setActiveProject } from '../projectStore'
 import { getProjectVideo, saveProjectVideo } from '../videoStore'
@@ -684,18 +538,6 @@ const phaseLoading = ref(false)
 const phaseError = ref('')
 const phaseJobStatus = ref('')
 let phasePollingTimer = null
-const editedSegments = ref([])
-const originalSegmentsRef = ref([])
-const selectedSegmentId = ref(null)
-const dragState = ref(null)
-// 拖拽边界结束瞬间 Chromium 仍会派发 click（pointerdown 的 preventDefault 压不住它），
-// 用该时间戳抑制拖拽后紧跟的误点击（否则松手会误触发色块播放/空白处添加片段）
-const suppressClickUntil = ref(0)
-// 记录人工标注轨上 pointerdown 是否落在片段内（见 onEditTrackPointerDown）
-const editTrackPointerDownOnBlock = ref(false)
-const annotationsSaving = ref(false)
-const playheadTrackRef = ref(null)
-const segmentTrackRef = ref(null)
 
 const instrumentStatsStatus = ref('idle')
 const instrumentStatsMessage = ref('')
@@ -743,26 +585,6 @@ const colorMap = {
   other: '#0ea5e9',
 }
 
-const PHASE_OPTIONS = [
-  { key: 'preparation', label: '术前准备', description: '建立手术视野并完成器械与解剖区域准备。' },
-  { key: 'calot_triangle_dissection', label: '胆囊三角解剖', description: '暴露 Calot 三角区域，识别胆囊管与胆囊动脉。' },
-  { key: 'clipping_cutting', label: '夹闭切断', description: '对关键管道进行夹闭并完成切断。' },
-  { key: 'gallbladder_dissection', label: '胆囊剥离', description: '沿胆囊床继续剥离，完成胆囊主体游离。' },
-  { key: 'gallbladder_packaging', label: '胆囊装袋', description: '将切除后的胆囊置入取物袋准备移出。' },
-  { key: 'cleaning_coagulation', label: '清理止血', description: '对创面进行清理、冲洗和止血凝固处理。' },
-  { key: 'gallbladder_retraction', label: '胆囊牵引', description: '通过牵引调整暴露视野，为后续操作创造条件。' },
-]
-
-const PHASE_COLORS = {
-  preparation: '#94a3b8',
-  calot_triangle_dissection: '#2563eb',
-  clipping_cutting: '#f59e0b',
-  gallbladder_dissection: '#10b981',
-  gallbladder_packaging: '#8b5cf6',
-  cleaning_coagulation: '#ef4444',
-  gallbladder_retraction: '#0ea5e9',
-}
-
 const isTracking = ref(false)
 const lastTrackTime = ref(0)
 
@@ -795,20 +617,7 @@ const annotationIntervalLabel = computed(() => {
   return `${formatTimeLabel(annotationTimerStart.value)} - ${formatTimeLabel(annotationTimerEnd.value)}`
 })
 
-const generatedSteps = computed(() => {
-  return [...editedSegments.value].sort((a, b) => a.startSeconds - b.startSeconds)
-})
-
-const selectedSegment = computed(() => {
-  return editedSegments.value.find((item) => item.id === selectedSegmentId.value) || null
-})
-
-const editPhaseKey = computed({
-  get: () => selectedSegment.value?.phaseKey || '',
-  set: (value) => {
-    if (selectedSegment.value) changeSegmentPhase(value)
-  },
-})
+const generatedSteps = computed(() => mergeAdjacentPhaseSteps(phaseAnalysisResult.value?.steps || []))
 
 const phaseAnalysisState = computed(() => currentProject.value?.phaseAnalysis || null)
 
@@ -1058,9 +867,6 @@ async function onVideoSelected(event) {
   phaseAnalysisResult.value = null
   phaseError.value = ''
   phaseJobStatus.value = ''
-  editedSegments.value = []
-  originalSegmentsRef.value = []
-  selectedSegmentId.value = null
   aiReportStatus.value = 'idle'
   qaMessages.value = [...defaultQaMessages]
   qaInput.value = ''
@@ -1155,104 +961,14 @@ function markerLeft(time) {
   return `${(ratio * 100).toFixed(2)}%`
 }
 
-function onVideoContainerClick(event) {
+function toggleVideoPlayback() {
   if (requireVideoBeforeAction()) return
-  const container = videoContainer.value
-  if (!container) return
-  const rect = container.getBoundingClientRect()
-  const x = event.clientX - rect.left
-  const y = event.clientY - rect.top
-  // 点击视频底部原生控制条区域时不添加样本点
-  if (videoEl.value && event.target === videoEl.value && y > rect.height - 48) return
-  if (isAddPositive.value) {
-    positivePoints.value.push({ x, y })
+  if (!videoEl.value) return
+  if (videoEl.value.paused) {
+    videoEl.value.play?.()
   } else {
-    negativePoints.value.push({ x, y })
+    videoEl.value.pause()
   }
-  showStatus(`已添加${isAddPositive.value ? '正' : '负'}样本点`, 'success')
-}
-
-
-// object-fit: contain 下，视频帧在容器内的实际显示区域（容器 CSS 像素坐标系）
-function computeContainRect(cw, ch, fw, fh) {
-  const scale = Math.min(cw / fw, ch / fh)
-  return {
-    scale,
-    offsetX: (cw - fw * scale) / 2,
-    offsetY: (ch - fh * scale) / 2,
-  }
-}
-
-function containerToFrame({ x, y }) {
-  const video = videoEl.value
-  const el = videoContainer.value
-  if (!video || !el || !video.videoWidth) return { x, y }
-  const rect = computeContainRect(el.clientWidth, el.clientHeight, video.videoWidth, video.videoHeight)
-  return { x: (x - rect.offsetX) / rect.scale, y: (y - rect.offsetY) / rect.scale }
-}
-
-function frameToContainer({ x, y }) {
-  const video = videoEl.value
-  const el = videoContainer.value
-  if (!video || !el || !video.videoWidth) return { x, y }
-  const rect = computeContainRect(el.clientWidth, el.clientHeight, video.videoWidth, video.videoHeight)
-  return { x: x * rect.scale + rect.offsetX, y: y * rect.scale + rect.offsetY }
-}
-
-// 截取当前视频帧为 JPEG base64，长边缩到 1024 以内
-function captureFrame() {
-  const video = videoEl.value
-  if (!video || !uploadedVideoUrl.value || video.readyState < 2) return null
-  const vw = video.videoWidth
-  const vh = video.videoHeight
-  if (!vw || !vh) return null
-  const scale = Math.min(1, 1024 / Math.max(vw, vh))
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.max(1, Math.round(vw * scale))
-  canvas.height = Math.max(1, Math.round(vh * scale))
-  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
-  return canvas.toDataURL('image/jpeg', 0.9)
-}
-
-// 掩码位图兜底：从 mask_png 的 alpha 通道取包围盒作为多边形（容器坐标系）
-async function polygonFromMaskPng(pngBase64) {
-  const img = new Image()
-  const loaded = new Promise((resolve, reject) => {
-    img.onload = resolve
-    img.onerror = () => reject(new Error('掩码图像解码失败'))
-  })
-  img.src = `data:image/png;base64,${pngBase64}`
-  await loaded
-
-  const canvas = document.createElement('canvas')
-  canvas.width = img.width
-  canvas.height = img.height
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(img, 0, 0)
-  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height)
-
-  let minX = canvas.width
-  let minY = canvas.height
-  let maxX = -1
-  let maxY = -1
-  for (let i = 3; i < data.length; i += 4) {
-    if (data[i] > 0) {
-      const px = ((i - 3) / 4) % canvas.width
-      const py = Math.floor((i - 3) / 4 / canvas.width)
-      if (px < minX) minX = px
-      if (px > maxX) maxX = px
-      if (py < minY) minY = py
-      if (py > maxY) maxY = py
-    }
-  }
-  if (maxX < minX || maxY < minY) return null
-
-  return [
-    [minX, minY],
-    [maxX, minY],
-    [maxX, maxY],
-    [minX, maxY],
-  ].map(([fx, fy]) => frameToContainer({ x: fx, y: fy }))
 }
 
 function toggleAnnotationTimer() {
@@ -1285,492 +1001,6 @@ function clearAnnotationTimer() {
   noteTimeInput.value = ''
 }
 
-function round2(value) {
-  return Math.round(value * 100) / 100
-}
-
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max)
-}
-
-function segLeft(seg) {
-  return markerLeft(seg.startSeconds)
-}
-
-function segWidth(seg) {
-  if (!duration.value) return '0%'
-  const ratio = Math.min(1, Math.max(0, (seg.endSeconds - seg.startSeconds) / duration.value))
-  return `${(ratio * 100).toFixed(2)}%`
-}
-
-function segColor(seg) {
-  return PHASE_COLORS[seg.phaseKey] || '#64748b'
-}
-
-function loadPhaseSegments() {
-  const saved = currentProject.value?.phaseAnalysis?.editedSegments
-  const aiSegments = phaseAnalysisResult.value?.segments || []
-  if (Array.isArray(saved) && saved.length) {
-    editedSegments.value = saved.map((item) => ({ ...item }))
-    originalSegmentsRef.value = aiSegments
-  } else if (aiSegments.length) {
-    editedSegments.value = aiSegments.map((item) => ({ ...item, source: 'ai', edited: false }))
-    originalSegmentsRef.value = aiSegments
-  } else {
-    editedSegments.value = []
-    originalSegmentsRef.value = []
-  }
-}
-
-function persistPhaseEdits() {
-  if (!currentProject.value) return
-  const updatedProject = {
-    ...currentProject.value,
-    phaseAnalysis: {
-      ...(currentProject.value.phaseAnalysis || {}),
-      editedSegments: editedSegments.value.map((item) => ({ ...item })),
-    },
-    updatedAt: new Date().toISOString(),
-    updatedAtLabel: new Date().toLocaleString('zh-CN'),
-  }
-  currentProject.value = updatedProject
-  saveProject(updatedProject)
-  setActiveProject(updatedProject)
-}
-
-async function saveAnnotationsToBackend() {
-  const jobId = currentProject.value?.phaseAnalysis?.jobId
-  if (!jobId) {
-    showStatus('当前任务没有可保存的标注', 'error')
-    return
-  }
-  if (!editedSegments.value.length) {
-    showStatus('暂无可保存的标注', 'error')
-    return
-  }
-  annotationsSaving.value = true
-  try {
-    const segments = editedSegments.value.map((item) => ({
-      phaseKey: item.phaseKey,
-      phaseLabel: item.phaseLabel || item.title || '',
-      startSeconds: round2(item.startSeconds),
-      endSeconds: round2(item.endSeconds),
-      edited: !!item.edited,
-      source: item.source || (item.edited ? 'user' : 'ai'),
-    }))
-    await savePhaseAnnotations(jobId, segments)
-    showStatus('标注已保存到服务器', 'success')
-  } catch (error) {
-    showStatus(error?.message || '标注保存失败', 'error')
-  } finally {
-    annotationsSaving.value = false
-  }
-}
-
-function startBoundaryDrag(event, seg, side) {
-  if (!duration.value || !segmentTrackRef.value) return
-  const trackRect = segmentTrackRef.value.getBoundingClientRect()
-  const index = editedSegments.value.findIndex((item) => item.id === seg.id)
-  const previous = editedSegments.value[index - 1]
-  const next = editedSegments.value[index + 1]
-  const minSec = side === 'left' ? (previous ? previous.endSeconds : 0) : seg.startSeconds + 1
-  const maxSec = side === 'left' ? seg.endSeconds - 1 : (next ? next.startSeconds : duration.value)
-  dragState.value = {
-    segId: seg.id,
-    side,
-    value: side === 'left' ? seg.startSeconds : seg.endSeconds,
-    minSec,
-    maxSec,
-    trackLeft: trackRect.left,
-    trackWidth: trackRect.width,
-  }
-
-  const onMove = (eventMove) => {
-    const state = dragState.value
-    if (!state) return
-    const dx = eventMove.clientX - state.trackLeft
-    const nextValue = clamp((dx / state.trackWidth) * duration.value, state.minSec, state.maxSec)
-    state.value = nextValue
-    const target = editedSegments.value.find((item) => item.id === state.segId)
-    if (target) {
-      if (state.side === 'left') {
-        target.startSeconds = round2(nextValue)
-        target.seconds = target.startSeconds
-      } else {
-        target.endSeconds = round2(nextValue)
-      }
-      target.time = `${formatTimeLabel(target.startSeconds)} - ${formatTimeLabel(target.endSeconds)}`
-      target.edited = true
-      target.source = 'user'
-    }
-  }
-
-  const onUp = () => {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    window.removeEventListener('pointercancel', onUp)
-    const hadDrag = !!dragState.value
-    dragState.value = null
-    suppressClickUntil.value = Date.now() + 300
-    if (hadDrag) {
-      persistPhaseEdits()
-      showStatus('片段边界已调整', 'success')
-    }
-  }
-
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
-  window.addEventListener('pointercancel', onUp)
-}
-
-function secondsFromClientX(clientX) {
-  if (!playheadTrackRef.value || !duration.value) return 0
-  const rect = playheadTrackRef.value.getBoundingClientRect()
-  const ratio = clamp((clientX - rect.left) / rect.width, 0, 1)
-  return ratio * duration.value
-}
-
-function onPlayheadDown(event) {
-  if (!duration.value || !videoEl.value) return
-  seekTo(secondsFromClientX(event.clientX))
-  const onMove = (eventMove) => {
-    seekTo(secondsFromClientX(eventMove.clientX))
-  }
-  const onUp = () => {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    window.removeEventListener('pointercancel', onUp)
-  }
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
-  window.addEventListener('pointercancel', onUp)
-}
-
-function selectAndPlaySegment(seg) {
-  if (Date.now() < suppressClickUntil.value) return
-  if (requireVideoBeforeAction()) return
-  selectedSegmentId.value = seg.id
-  if (activeLoopRange.value && activeLoopNoteId.value === null) {
-    activeLoopRange.value = null
-    videoEl.value?.pause?.()
-    showStatus('已退出片段循环播放', 'success')
-    return
-  }
-  seekTo(seg.startSeconds)
-  activeLoopNoteId.value = null
-  activeLoopRange.value = { startTime: seg.startSeconds, endTime: seg.endSeconds }
-  videoEl.value?.play?.()
-  showStatus(`正在循环播放片段 ${formatTimeLabel(seg.startSeconds)} - ${formatTimeLabel(seg.endSeconds)}`, 'success')
-}
-
-function playAiSegment(seg) {
-  // 只读 AI 轨：跳转 + 循环播放，不进入编辑选中态
-  if (requireVideoBeforeAction()) return
-  if (activeLoopRange.value && activeLoopNoteId.value === null) {
-    activeLoopRange.value = null
-    videoEl.value?.pause?.()
-    showStatus('已退出片段循环播放', 'success')
-    return
-  }
-  seekTo(seg.startSeconds)
-  activeLoopNoteId.value = null
-  activeLoopRange.value = { startTime: seg.startSeconds, endTime: seg.endSeconds }
-  videoEl.value?.play?.()
-  showStatus(`正在循环播放片段 ${formatTimeLabel(seg.startSeconds)} - ${formatTimeLabel(seg.endSeconds)}`, 'success')
-}
-
-function createSegmentAt(centerTime) {
-  // 在指定时间点添加一段新标注（默认 3 秒，自动选中）
-  // 返回 { status: 'split' | 'added', segment } / false（空间不足失败）
-  // 添加成功后自动把播放头定位到新片段末尾：连续点“添加片段”会依次向后衔接，
-  // 不会每次都插在时间线最前面（视频停在 00:00 时播放头就是 0）
-  if (!duration.value) return false
-  const targetTime = clamp(centerTime, 0, duration.value)
-  const defaultDuration = 3
-
-  const makeSegment = (start, end) => {
-    const option = PHASE_OPTIONS.find((item) => item.key === 'preparation') || PHASE_OPTIONS[0]
-    const segment = {
-      id: `seg-${Date.now()}-u`,
-      phaseKey: option.key,
-      phaseLabel: option.label,
-      title: option.label,
-      description: option.description,
-      startSeconds: start,
-      endSeconds: end,
-      seconds: start,
-      time: `${formatTimeLabel(start)} - ${formatTimeLabel(end)}`,
-      edited: true,
-      source: 'user',
-    }
-    editedSegments.value.push(segment)
-    selectedSegmentId.value = segment.id
-    return segment
-  }
-
-  const commit = (segment) => {
-    // 新片段落定后：清循环、持久化、把播放头定位到新片段末尾（只定位，不改变播放/暂停状态）
-    activeLoopRange.value = null
-    activeLoopNoteId.value = null
-    persistPhaseEdits()
-    if (videoEl.value) {
-      videoEl.value.currentTime = segment.endSeconds
-      currentTime.value = segment.endSeconds
-    }
-  }
-
-  // 目标点在已有片段内部 → 剪辑软件式插入：原片段在播放头处拆成两段，中间插入新片段
-  const inside = editedSegments.value.find(
-    (seg) => targetTime >= seg.startSeconds && targetTime < seg.endSeconds
-  )
-  if (inside) {
-    const bStart = inside.startSeconds
-    const bEnd = inside.endSeconds
-    let newStart
-    let newEnd
-    if (targetTime - bStart < 0.05) {
-      // 播放头正好在片段开头（含自动后移衔接的情况）→ 从片段开头向后插入完整片段
-      newStart = bStart
-      newEnd = Math.min(bStart + defaultDuration, bEnd)
-    } else {
-      newStart = targetTime - defaultDuration / 2
-      newEnd = targetTime + defaultDuration / 2
-      if (newEnd - newStart > bEnd - bStart) {
-        // 原片段不足 3 秒 → 新片段直接占满原片段
-        newStart = bStart
-        newEnd = bEnd
-      } else {
-        if (newStart < bStart) {
-          newStart = bStart
-          newEnd = newStart + defaultDuration
-        }
-        if (newEnd > bEnd) {
-          newEnd = bEnd
-          newStart = newEnd - defaultDuration
-        }
-      }
-      newStart = round2(clamp(newStart, bStart, Math.max(bStart, bEnd - 1)))
-      newEnd = round2(clamp(newEnd, newStart + 1, bEnd))
-    }
-
-    const idx = editedSegments.value.findIndex((s) => s.id === inside.id)
-    editedSegments.value.splice(idx, 1)
-    if (newStart - bStart >= 1) {
-      editedSegments.value.push({
-        ...inside,
-        id: `${inside.id}-l`,
-        startSeconds: bStart,
-        endSeconds: newStart,
-        seconds: bStart,
-        time: `${formatTimeLabel(bStart)} - ${formatTimeLabel(newStart)}`,
-        edited: true,
-        source: 'user',
-      })
-    }
-    if (bEnd - newEnd >= 1) {
-      editedSegments.value.push({
-        ...inside,
-        id: `${inside.id}-r`,
-        startSeconds: newEnd,
-        endSeconds: bEnd,
-        seconds: newEnd,
-        time: `${formatTimeLabel(newEnd)} - ${formatTimeLabel(bEnd)}`,
-        edited: true,
-        source: 'user',
-      })
-    }
-    const segment = makeSegment(newStart, newEnd)
-    commit(segment)
-    return { status: 'split', segment }
-  }
-
-  // 目标点在空隙中：找目标点所在的空隙 [gapStart, gapEnd]（相邻标注块之间）
-  const sorted = [...editedSegments.value].sort((a, b) => a.startSeconds - b.startSeconds)
-  let gapStart = 0
-  let gapEnd = duration.value
-  let cursor = 0
-  for (const seg of sorted) {
-    if (targetTime < seg.startSeconds) {
-      gapEnd = seg.startSeconds
-      break
-    }
-    if (targetTime < seg.endSeconds) {
-      // 理论上不会走到（上面已拦截块内部的情况），防御性跳过
-      cursor = Math.max(cursor, seg.endSeconds)
-      continue
-    }
-    cursor = Math.max(cursor, seg.endSeconds)
-  }
-  gapStart = cursor
-
-  const gapSize = gapEnd - gapStart
-  if (gapSize < 1) return false
-
-  // 以目标时间点为中心 3 秒，clamp 进空隙（空隙不足时贴满空隙，最小 1 秒）
-  let start = targetTime - defaultDuration / 2
-  let end = targetTime + defaultDuration / 2
-  if (end - start > gapSize) {
-    start = gapStart
-    end = gapEnd
-  } else {
-    start = clamp(start, gapStart, gapEnd - (end - start))
-    end = start + (end - start)
-  }
-  start = round2(clamp(start, gapStart, Math.max(gapStart, gapEnd - 1)))
-  end = round2(clamp(end, start + 1, gapEnd))
-
-  const segment = makeSegment(start, end)
-  commit(segment)
-  return { status: 'added', segment }
-}
-
-function showAddResult(result) {
-  // 统一提示“添加片段”的结果，文案中带上新片段的时间范围
-  if (!result) {
-    showStatus('该位置空间不足，无法添加片段', 'error')
-    return
-  }
-  const seg = result.segment
-  const range = `${formatTimeLabel(seg.startSeconds)}-${formatTimeLabel(seg.endSeconds)}`
-  showStatus(
-    result.status === 'split'
-      ? `已插入片段 ${range}（原片段已自动拆分）`
-      : `已添加片段 ${range}，可在右侧修改阶段`,
-    'success'
-  )
-}
-
-function addSegmentAtTrackClick(event) {
-  // 点击人工标注轨空白处 → 在该位置添加一段新标注
-  if (Date.now() < suppressClickUntil.value) return
-  if (!segmentTrackRef.value) return
-  if (event.target.closest('.segment-block')) return
-  // 指针按下时在片段上、松开时滑到轨道上（点击小片段时手稍微一偏就触发）→ 不是有意添加，忽略
-  if (editTrackPointerDownOnBlock.value) return
-  if (requireVideoBeforeAction()) return
-
-  showAddResult(createSegmentAt(secondsFromClientX(event.clientX)))
-}
-
-function onEditTrackPointerDown(event) {
-  // 记录按下位置是否在片段内：点击“片段”时拖偏了松开在轨道上，click 事件目标会变成轨道，
-  // 若直接按空白处添加会误插一段（原片段被拆成灰色新块，看起来像“变透明且无法恢复”）
-  editTrackPointerDownOnBlock.value = !!event.target.closest('.segment-block')
-}
-
-function addSegmentAtPlayhead() {
-  // 编辑界面按钮：在播放头当前位置添加一段新标注
-  if (requireVideoBeforeAction()) return
-
-  showAddResult(createSegmentAt(currentTime.value))
-}
-
-function changeSegmentPhase(phaseKey) {
-  const seg = selectedSegment.value
-  if (!seg || !phaseKey) return
-  const option = PHASE_OPTIONS.find((item) => item.key === phaseKey)
-  if (!option) return
-  seg.phaseKey = phaseKey
-  seg.phaseLabel = option.label
-  seg.title = option.label
-  seg.description = option.description
-  seg.edited = true
-  seg.source = 'user'
-  persistPhaseEdits()
-  showStatus(`阶段已改为「${option.label}」`, 'success')
-}
-
-function splitSelectedSegment() {
-  const seg = selectedSegment.value
-  if (!seg) return
-  const playhead = currentTime.value
-  if (playhead <= seg.startSeconds + 1 || playhead >= seg.endSeconds - 1) {
-    showStatus('播放头需在片段内部（距离边界至少 1 秒）', 'error')
-    return
-  }
-  const index = editedSegments.value.findIndex((item) => item.id === seg.id)
-  const left = {
-    ...seg,
-    id: `seg-${Date.now()}-l`,
-    endSeconds: round2(playhead),
-    time: `${formatTimeLabel(seg.startSeconds)} - ${formatTimeLabel(playhead)}`,
-    edited: false,
-    source: 'ai',
-  }
-  const right = {
-    ...seg,
-    id: `seg-${Date.now()}-r`,
-    startSeconds: round2(playhead),
-    seconds: round2(playhead),
-    time: `${formatTimeLabel(playhead)} - ${formatTimeLabel(seg.endSeconds)}`,
-    edited: true,
-    source: 'user',
-  }
-  editedSegments.value.splice(index, 1, left, right)
-  selectedSegmentId.value = left.id
-  persistPhaseEdits()
-  showStatus('已按播放头拆分片段', 'success')
-}
-
-function deleteSegmentById(id) {
-  const index = editedSegments.value.findIndex((item) => item.id === id)
-  if (index === -1) return
-  editedSegments.value.splice(index, 1)
-  if (selectedSegmentId.value === id) {
-    selectedSegmentId.value = null
-    activeLoopRange.value = null
-  }
-  persistPhaseEdits()
-  showStatus('片段已删除', 'success')
-}
-
-function deleteSelectedSegment() {
-  deleteSegmentById(selectedSegmentId.value)
-}
-
-function restoreAiSegments() {
-  if (!originalSegmentsRef.value.length) {
-    showStatus('暂无可恢复的 AI 原始结果', 'error')
-    return
-  }
-  editedSegments.value = originalSegmentsRef.value.map((item) => ({ ...item, source: 'ai', edited: false }))
-  selectedSegmentId.value = null
-  activeLoopRange.value = null
-  persistPhaseEdits()
-  showStatus('已恢复 AI 原始结果', 'success')
-}
-
-function exportStepAnnotations() {
-  if (!editedSegments.value.length) {
-    showStatus('暂无可导出的步骤标注', 'error')
-    return
-  }
-  const sorted = [...editedSegments.value].sort((a, b) => a.startSeconds - b.startSeconds)
-  const payload = {
-    video: currentProject.value?.fileName || '',
-    duration: round2(duration.value || 0),
-    source: 'ai+user',
-    exportedAt: new Date().toISOString(),
-    segments: sorted.map((item) => ({
-      phaseKey: item.phaseKey,
-      phaseLabel: item.phaseLabel || item.title || '',
-      startSeconds: round2(item.startSeconds),
-      endSeconds: round2(item.endSeconds),
-      edited: !!item.edited,
-      source: item.source || (item.edited ? 'user' : 'ai'),
-    })),
-  }
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  const baseName = (currentProject.value?.fileName || 'video').replace(/\.[^.]+$/, '')
-  link.href = url
-  link.download = `${baseName}-step-annotations.json`
-  link.click()
-  window.setTimeout(() => URL.revokeObjectURL(url), 3000)
-  showStatus('步骤标注已导出', 'success')
-}
-
 function setPointMode(isPositive) {
   if (requireVideoBeforeAction()) return
   isAddPositive.value = isPositive
@@ -1797,64 +1027,25 @@ async function runSegmentation() {
   }
 
   isProcessing.value = true
+  showStatus('正在生成分析掩码...', 'success')
+  await new Promise((resolve) => setTimeout(resolve, 400))
+
   const color = colorMap[annotationType.value] || '#3b82f6'
+  const maskPoints = generateMaskFromPoints(positivePoints.value, negativePoints.value)
 
-  const applyMask = (maskPoints) => {
-    if (!Array.isArray(maskPoints) || maskPoints.length < 3) return false
-    currentMask.value = {
-      points: maskPoints,
-      color,
-      opacity: maskOpacity.value,
-      velocity: { x: 20, y: 8 },
-      lastCenter: getPolygonCenter(maskPoints),
-    }
-    drawMask(currentMask.value)
-    return true
+  currentMask.value = {
+    points: maskPoints,
+    color,
+    opacity: maskOpacity.value,
+    velocity: { x: 20, y: 8 },
+    lastCenter: getPolygonCenter(maskPoints),
   }
 
-  const applyMock = () => {
-    applyMask(generateMaskFromPoints(positivePoints.value, negativePoints.value))
-    showStatus('分割服务不可用，已使用模拟结果', 'error')
-  }
-
-  try {
-    const imageBase64 = captureFrame()
-    if (!imageBase64) throw new Error('视频尚未就绪')
-
-    const points = [
-      ...positivePoints.value.map((p) => ({ ...containerToFrame(p), label: 1 })),
-      ...negativePoints.value.map((p) => ({ ...containerToFrame(p), label: 0 })),
-    ]
-
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 45000)
-    showStatus('正在调用分割模型生成掩码...', 'success')
-
-    let payload
-    try {
-      payload = await segmentFrame({ imageBase64, points }, controller.signal)
-    } finally {
-      clearTimeout(timer)
-    }
-
-    let maskPoints = null
-    if (Array.isArray(payload?.polygon) && payload.polygon.length >= 3) {
-      maskPoints = payload.polygon.map(([fx, fy]) => frameToContainer({ x: fx, y: fy }))
-    } else if (payload?.mask_png) {
-      maskPoints = await polygonFromMaskPng(payload.mask_png)
-    }
-    if (!applyMask(maskPoints)) throw new Error('模型未返回有效掩码')
-
-    isTracking.value = true
-    lastTrackTime.value = currentTime.value
-    const deviceLabel = payload?.device === 'cuda' ? 'GPU' : 'CPU'
-    showStatus(`已生成分割掩码（${deviceLabel}，${payload?.elapsed_ms ?? '--'}ms）`, 'success')
-  } catch (error) {
-    console.warn('分割服务不可用，使用模拟结果：', error)
-    applyMock()
-  } finally {
-    isProcessing.value = false
-  }
+  drawMask(currentMask.value)
+  isTracking.value = true
+  lastTrackTime.value = currentTime.value
+  isProcessing.value = false
+  showStatus('已生成分析区域，可以保存标注', 'success')
 }
 
 async function runPhaseAnalysis() {
@@ -1922,7 +1113,6 @@ async function refreshPhaseJob() {
 
     if (job.status === 'completed') {
       stopPhasePolling()
-      loadPhaseSegments()
       showStatus(`关键步骤分析完成，保留 ${job.result?.steps?.length || 0} 个高置信度步骤`, 'success')
     } else if (job.status === 'failed') {
       stopPhasePolling()
@@ -2210,7 +1400,7 @@ function exportAnnotations() {
   link.href = url
   link.download = 'video-annotations.json'
   link.click()
-  window.setTimeout(() => URL.revokeObjectURL(url), 3000)
+  URL.revokeObjectURL(url)
 }
 
 async function exportSummary() {
@@ -2496,11 +1686,10 @@ function addNote() {
     showStatus('请输入文字注释内容', 'error')
     return
   }
-  const noteId = Date.now()
   notes.value = [
     ...notes.value,
     {
-      id: noteId,
+      id: Date.now(),
       time: range.startTime,
       startTime: range.startTime,
       endTime: range.endTime,
@@ -2511,12 +1700,6 @@ function addNote() {
   noteTextInput.value = ''
   clearAnnotationTimer()
   showStatus('文字注释已添加', 'success')
-  // 注释按时间排序，可能插在列表中间或视口外——滚到新注释所在行
-  nextTick(() => {
-    document
-      .getElementById(`note-row-${noteId}`)
-      ?.scrollIntoView({ block: 'nearest' })
-  })
 }
 
 function formatNoteRange(note) {
@@ -2588,7 +1771,6 @@ onMounted(() => {
   phaseAnalysisResult.value = currentProject.value?.phaseAnalysis?.result || null
   phaseError.value = currentProject.value?.phaseAnalysis?.error || ''
   phaseJobStatus.value = currentProject.value?.phaseAnalysis?.status || ''
-  loadPhaseSegments()
 
   if (currentProject.value?.videoUrl) {
     uploadedVideoUrl.value = currentProject.value.videoUrl
@@ -2705,21 +1887,7 @@ const analysisImageSrc =
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  /* 左列内容（视频 + 时间线 + 注释）超出视口时可上下滚动 */
-}
-.analysis-video-column::-webkit-scrollbar {
-  width: 8px;
-}
-.analysis-video-column::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: #cbd5e1;
-}
-.analysis-video-column::-webkit-scrollbar-track {
-  background: transparent;
+  overflow: hidden;
 }
 .analysis-video-column > :not([hidden]) ~ :not([hidden]) {
   margin-top: 0 !important;
@@ -2730,23 +1898,16 @@ const analysisImageSrc =
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 4px;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  /* 提升为独立合成层，滚动由合成器接管，避免每帧重绘导致的卡顿 */
-  will-change: transform;
+  overflow: hidden;
 }
 .middle-video-aligned-panel {
-  flex: 0 0 auto;
+  flex: 0 0 clamp(300px, 23vw, 43vh);
   min-height: 0;
-  height: auto;
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  grid-template-rows: auto auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto minmax(92px, 1fr);
   gap: 12px;
-  overflow: visible;
+  overflow: hidden;
 }
 .side-card {
   min-width: 0;
@@ -2778,105 +1939,77 @@ const analysisImageSrc =
   flex-direction: column;
 }
 .overview-grid {
-  flex: 0 0 auto;
+  flex: 1;
   min-height: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: auto auto auto;
+  grid-template-rows: repeat(2, minmax(0, 1fr)) minmax(0, 1.25fr);
   gap: 10px;
 }
 .overview-card {
   min-width: 0;
-  min-height: 84px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px;
+  gap: 10px;
+  padding: 12px;
   border-radius: 10px;
   background: #fff;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 .overview-icon {
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 10px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 15px;
 }
 .overview-icon.warning {
   background: #fff7ed;
   color: #f97316;
 }
 .overview-card-body {
-  flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
 }
 .overview-card p:first-child {
-  margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.35;
   white-space: nowrap;
 }
-
 .overview-card .font-bold {
-  margin-top: 3px;
-  font-size: 17px;
-  line-height: 1.3;
-  white-space: nowrap;
+  margin-top: 2px;
+  font-size: 18px;
+  line-height: 1.35;
 }
 .overview-card-wide {
   grid-column: 1 / -1;
 }
 .overview-status-card {
   min-width: 0;
-  min-height: 96px;
+  min-height: 0;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   padding: 12px;
   border-radius: 10px;
   background: #fff;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
-
 .overview-status-main {
-  width: 100%;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
 }
-
-.overview-status-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.overview-status-heading {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.overview-status-heading p {
+.overview-status-card > .text-xs {
+  flex: 0 0 auto;
   margin: 0;
   white-space: nowrap;
-}
-
-.overview-status-description {
-  margin: 5px 0 0;
-  color: #94a3b8;
-  font-size: 13px;
-  line-height: 1.45;
-  white-space: normal;
-  word-break: normal;
-  overflow-wrap: anywhere;
 }
 .analysis-side-panel::-webkit-scrollbar {
   width: 8px;
@@ -2991,180 +2124,9 @@ const analysisImageSrc =
   background: #f59e0b;
   transform: translateX(-1px);
 }
-.playhead-bar { cursor: pointer; }
-.playhead-handle {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 10px;
-  margin-left: -5px;
-  background: #2563eb;
-  border-radius: 4px;
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.4);
-  z-index: 5;
-  cursor: ew-resize;
-}
-.segment-track {
-  position: relative;
-  height: 44px;
-  margin-top: 10px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  overflow: hidden;
-  user-select: none;
-  -webkit-user-select: none;
-}
-.ai-track {
-  height: 32px;
-  margin-top: 6px;
-  background: #f8fafc;
-}
-.edit-track {
-  margin-top: 6px;
-}
-.track-label {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  z-index: 7;
-  padding: 1px 7px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 800;
-  color: #475569;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid #e2e8f0;
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-.track-label.edit {
-  color: #fff;
-  background: #2563eb;
-  border-color: #2563eb;
-}
-.ai-block {
-  cursor: pointer;
-}
-.ai-block:hover {
-  filter: brightness(1.08);
-}
-.segment-track-empty {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #94a3b8;
-  font-size: 13px;
-  font-weight: 700;
-}
-.segment-block {
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.35), 0 2px 6px rgba(15, 23, 42, 0.18);
-  transition: filter 0.15s ease, box-shadow 0.15s ease;
-  box-sizing: border-box;
-}
-.segment-block:hover { filter: brightness(1.08); }
-.segment-block.selected {
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2563eb, 0 4px 12px rgba(37, 99, 235, 0.35);
-  z-index: 2;
-}
-.segment-label {
-  font-size: 12px;
-  font-weight: 800;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0 14px;
-  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.4);
-}
-.segment-handle {
-  position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 9px;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  border-radius: 4px;
-  cursor: ew-resize;
-  touch-action: none;
-  z-index: 3;
-}
-.segment-handle.left { left: -3px; }
-.segment-handle.right { right: -3px; }
-.segment-handle:hover { background: #fff; }
-.segment-time-tip {
-  position: absolute;
-  top: -26px;
-  padding: 3px 7px;
-  border-radius: 6px;
-  background: #0f172a;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-  z-index: 6;
-  pointer-events: none;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
-}
-.segment-playhead {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: #2563eb;
-  pointer-events: none;
-  z-index: 4;
-}
-.segment-edit-bar {
-  position: sticky;
-  top: -1px;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 10px 12px;
-  border: 1px solid #bfdbfe;
-  background: #eff6ff;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
-}
-.segment-edit-title { font-weight: 800; font-size: 14px; color: #1d4ed8; }
-.phase-select { width: auto; min-width: 150px; font-size: 14px; }
-.phase-step-row { cursor: pointer; }
-.phase-step-row.step-selected {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
-}
-.seg-mini {
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #1d4ed8;
-  background: #fff;
-  border: 1px solid #93c5fd;
-  border-radius: 8px;
-  cursor: pointer;
-}
-.seg-mini:hover { background: #dbeafe; }
-.seg-mini.danger { color: #b91c1c; border-color: #fca5a5; }
-.seg-mini.danger:hover { background: #fee2e2; }
 .note-panel {
-  /* 不参与压缩：面板按内容自然撑高，列表在下方依次排列，超出部分由左列整体滚动。
-     之前 flex: 1 1 auto + 内部 overflow-y 形成嵌套滚动区，面板被定高列挤扁、
-     列表压成 0 高，新加的注释行被裁掉看不见 */
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 15px;
@@ -3179,11 +2141,15 @@ const analysisImageSrc =
   font-size: 16px;
 }
 .note-list {
-  /* 不再内部滚动：整列由外层 .analysis-video-column 统一滚动 */
-  flex: 0 0 auto;
+  flex: 1;
+  min-height: 0;
   margin-top: 10px;
+  padding-right: 4px;
   display: grid;
   gap: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 .note-list.is-empty {
   display: flex;
@@ -3367,11 +2333,10 @@ const analysisImageSrc =
 .empty { margin-top: 12px; padding: 12px; border: 1px dashed #e5e7eb; border-radius: 10px; color: #64748b; font-size: 13px; background: #f8fafc; }
 .phase-analysis-card {
   grid-column: 1 / -1;
-  flex: 0 0 auto;
-  min-height: 280px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: visible;
+  overflow: hidden;
   margin-bottom: 0;
 }
 .phase-analysis-card > .flex {
@@ -3389,19 +2354,16 @@ const analysisImageSrc =
   justify-content: center;
 }
 .phase-steps-list {
-  /* 列表不再自己滚动：整列由外层 .analysis-side-panel 统一滚动。
-     之前列表带 overflow-y:auto + overscroll-behavior:contain 形成嵌套滚动区，
-     滚轮在列表区域被它吃掉——往上滚被 contain 掐断、联动不到面板 */
-  flex: 0 0 auto;
+  flex: 1;
   min-height: 0;
   max-height: none;
   height: auto;
   padding-right: 6px;
-  /* grid → flex 列：sticky 在 grid 中只会贴在单元格内（等于不生效），
-     flex 才能让编辑工具条真正随列滚动吸顶 */
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 .analysis-assistant-panel {
   height: 100%;
@@ -3480,11 +2442,6 @@ const analysisImageSrc =
   font-size: 16px;
   font-weight: 700;
 }
-.phase-action-btn .phase-action-text {
-  display: inline-block;
-  text-align: center;
-  line-height: 1.3;
-}
 .phase-empty {
   flex: 1;
   min-height: 0;
@@ -3517,54 +2474,6 @@ const analysisImageSrc =
 .phase-step-body {
   min-width: 0;
   flex: 1;
-  /* 关键步骤行文字层级：标题 15 加粗 > 描述 14 > 时间/置信度 13。
-     !important 用于压过页面级的全局放大字号规则（.text-xs/.text-sm/h3 等） */
-}
-.analysis-page .phase-step-body h3 {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 15px !important;
-  font-weight: 700;
-  color: #0f172a;
-  line-height: 1.45;
-}
-.analysis-page .phase-step-body span.rounded-full {
-  flex: 0 0 auto;
-  font-size: 12px !important;
-  line-height: 1.5;
-  padding: 2px 9px;
-  white-space: nowrap;
-}
-.analysis-page .phase-step-body p {
-  font-size: 14px !important;
-  line-height: 1.6;
-  color: #475569;
-}
-.analysis-page .phase-step-body > div:last-child {
-  font-size: 13px !important;
-}
-.phase-step-actions {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.phase-step-delete {
-  flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 9px;
-  background: transparent;
-  color: #94a3b8;
-  cursor: pointer;
-}
-.phase-step-delete:hover {
-  background: #fee2e2;
-  color: #b91c1c;
 }
 .phase-step-play {
   flex: 0 0 auto;
@@ -3782,16 +2691,11 @@ const analysisImageSrc =
 }
 @media (max-width: 1599px) {
   .analysis-main-grid {
-    grid-template-columns:
-      minmax(420px, 0.85fr)
-      minmax(500px, 0.9fr)
-      minmax(320px, 0.55fr);
+    grid-template-columns: minmax(440px, 0.92fr) minmax(360px, 0.7fr) minmax(340px, 0.58fr);
   }
-
   .analysis-assistant-panel {
     height: 100%;
   }
-
   .analysis-side-panel {
     height: 100%;
   }
@@ -4013,26 +2917,5 @@ const analysisImageSrc =
   border-radius: inherit;
   background: linear-gradient(135deg, #2563eb, #0ea5e9);
   transition: width 0.2s ease;
-}
-.overview-icon {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background: #eff6ff;
-  color: #2563eb;
-  font-size: 15px;
-}
-
-.overview-icon i {
-  color: inherit;
-}
-
-.overview-icon.warning {
-  background: #fff7ed;
-  color: #f97316;
 }
 </style>
