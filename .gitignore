@@ -1,0 +1,8 @@
+# 模型权重文件不上传（按 CONTRIBUTING 规范，权重从网盘下载）
+*.pth.tar
+*.pth
+*.pt
+
+# 备份/本地文件
+*.tmp
+*.bak
