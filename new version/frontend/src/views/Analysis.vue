@@ -132,7 +132,7 @@
               </template>
             </div>
 
-            <div class="segment-track edit-track" ref="segmentTrackRef" @pointerdown="onEditTrackPointerDown" @click="addSegmentAtTrackClick">
+            <div class="segment-track edit-track" ref="segmentTrackRef" @pointerdown.capture="onEditTrackPointerDown" @click="addSegmentAtTrackClick">
               <span class="track-label edit">人工标注</span>
               <div v-if="!editedSegments.length" class="segment-track-empty">
                 AI 结果会自动放入此轨，也可点击空白处手动添加标注
@@ -1370,26 +1370,37 @@ async function saveAnnotationsToBackend() {
 function startBoundaryDrag(event, seg, side) {
   if (!duration.value || !segmentTrackRef.value) return
   const trackRect = segmentTrackRef.value.getBoundingClientRect()
-  const index = editedSegments.value.findIndex((item) => item.id === seg.id)
-  const previous = editedSegments.value[index - 1]
-  const next = editedSegments.value[index + 1]
+  // editedSegments 按“添加顺序”存储，并非按时间排序，前后邻居必须按时间找：
+  // 否则后添加的靠前片段会把 previous 错认成右侧片段（minSec > maxSec），
+  // 左边界被 clamp 死，表现为“一点击左边界就缩成一小块、拉不动”
+  const sorted = [...editedSegments.value].sort((a, b) => a.startSeconds - b.startSeconds)
+  const index = sorted.findIndex((item) => item.id === seg.id)
+  const previous = sorted[index - 1]
+  const next = sorted[index + 1]
+  const startValue = side === 'left' ? seg.startSeconds : seg.endSeconds
   const minSec = side === 'left' ? (previous ? previous.endSeconds : 0) : seg.startSeconds + 1
   const maxSec = side === 'left' ? seg.endSeconds - 1 : (next ? next.startSeconds : duration.value)
+  // 相对偏移模式：以按下时的边界值为基准，拖动多少就变化多少。
+  // 不能用“指针在轨道上的绝对位置映射秒数”——窄片段上的把手很宽，
+  // 按下位置在把手右半段时，1px 的手抖就会让边界瞬间跳走，片段被“缩成一小块”。
   dragState.value = {
     segId: seg.id,
     side,
-    value: side === 'left' ? seg.startSeconds : seg.endSeconds,
+    value: startValue,
+    startValue,
+    startClientX: event.clientX,
     minSec,
     maxSec,
-    trackLeft: trackRect.left,
     trackWidth: trackRect.width,
   }
+  // 左边界已贴住时间轴起点(0)时只提示一次，避免每次移动都弹
+  let atStartHinted = false
 
   const onMove = (eventMove) => {
     const state = dragState.value
     if (!state) return
-    const dx = eventMove.clientX - state.trackLeft
-    const nextValue = clamp((dx / state.trackWidth) * duration.value, state.minSec, state.maxSec)
+    const delta = ((eventMove.clientX - state.startClientX) / state.trackWidth) * duration.value
+    const nextValue = clamp(state.startValue + delta, state.minSec, state.maxSec)
     state.value = nextValue
     const target = editedSegments.value.find((item) => item.id === state.segId)
     if (target) {
@@ -1403,16 +1414,22 @@ function startBoundaryDrag(event, seg, side) {
       target.edited = true
       target.source = 'user'
     }
+    if (state.side === 'left' && state.minSec === 0 && nextValue <= 0 && delta < 0 && !atStartHinted) {
+      atStartHinted = true
+      showStatus('已到时间轴起点(00:00)，片段无法继续向左', 'error')
+    }
   }
 
   const onUp = () => {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
     window.removeEventListener('pointercancel', onUp)
-    const hadDrag = !!dragState.value
+    const state = dragState.value
     dragState.value = null
     suppressClickUntil.value = Date.now() + 300
-    if (hadDrag) {
+    // 只有边界值真的发生变化才保存并提示；否则一次点击也会触发
+    // “边界已调整”的保存提示，让用户误以为片段被改动了
+    if (state && Math.abs(state.value - state.startValue) >= 0.05) {
       persistPhaseEdits()
       showStatus('片段边界已调整', 'success')
     }
