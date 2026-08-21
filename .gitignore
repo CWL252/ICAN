@@ -14,5 +14,6 @@ node_modules/
 __pycache__/
 *.py[cod]
 .claude/
-backend/runtime/
-frontend/dist/
+**/backend/runtime/
+**/frontend/dist/
+**/.vite/
