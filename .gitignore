@@ -6,3 +6,13 @@
 # 备份/本地文件
 *.tmp
 *.bak
+
+# 本地环境目录（不随分支上传）
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.py[cod]
+.claude/
+backend/runtime/
+frontend/dist/
