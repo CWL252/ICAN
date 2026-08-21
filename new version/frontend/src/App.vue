@@ -40,6 +40,14 @@
             首页
           </router-link>
 
+          <router-link
+            to="/community"
+            class="btn-secondary"
+          >
+            <i class="fas fa-users mr-2"></i>
+            社区
+          </router-link>
+
           <button
             class="btn-secondary"
             type="button"

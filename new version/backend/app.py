@@ -10,6 +10,7 @@ from job_manager import PhaseJobManager
 from phase_service import PhaseInferenceService
 from sam_service import SamModelUnavailableError, sam_service
 from auth import get_current_user, router as auth_router
+from community import router as community_router
 
 
 # Doubao Ark settings.
@@ -22,6 +23,7 @@ DOUBAO_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
 app = FastAPI(title="SurgInsight Phase Analysis API", version="0.1.0")
 
 app.include_router(auth_router)
+app.include_router(community_router)
 
 app.add_middleware(
     CORSMiddleware,
