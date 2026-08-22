@@ -39,9 +39,10 @@ function withBody(method, body) {
 
 // ---------------------------------------------------------------- projects
 
-export function listProjects({ q = '', sort = 'newest', limit = 20, offset = 0, mine = false } = {}) {
+export function listProjects({ q = '', sort = 'newest', limit = 20, offset = 0, mine = false, authorId = null } = {}) {
   const params = new URLSearchParams({ q, sort, limit, offset })
   if (mine) params.set('mine', 'true')
+  if (authorId != null) params.set('author_id', authorId)
   return request(`/api/community/projects?${params.toString()}`)
 }
 
@@ -63,9 +64,10 @@ export function deleteProject(projectId) {
 
 // ---------------------------------------------------------------- posts
 
-export function listPosts({ q = '', limit = 20, offset = 0, mine = false } = {}) {
+export function listPosts({ q = '', limit = 20, offset = 0, mine = false, authorId = null } = {}) {
   const params = new URLSearchParams({ q, limit, offset })
   if (mine) params.set('mine', 'true')
+  if (authorId != null) params.set('author_id', authorId)
   return request(`/api/community/posts?${params.toString()}`)
 }
 
@@ -105,6 +107,14 @@ export function deleteComment(commentId) {
 
 export function listMyComments() {
   return request('/api/community/comments?mine=true')
+}
+
+export function listMyFavorites() {
+  return request('/api/community/me/favorites')
+}
+
+export function listMyLikes() {
+  return request('/api/community/me/likes')
 }
 
 // ---------------------------------------------------------------- likes / favorites
@@ -191,4 +201,8 @@ export function getUserProfile(userId) {
 
 export function getFeed(limit = 20) {
   return request(`/api/community/feed?limit=${limit}`)
+}
+
+export function listMyFollowing() {
+  return request('/api/community/me/following')
 }

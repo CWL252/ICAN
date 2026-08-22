@@ -182,10 +182,24 @@
             {{ post.excerpt }}
           </p>
           <div class="flex items-center gap-1 text-sm text-slate-500 mt-3">
-            <span class="engagement-button" :class="post.liked ? 'engagement-on' : ''">
+            <button
+              class="engagement-button"
+              :class="post.liked ? 'engagement-on' : ''"
+              title="点赞"
+              @click.stop="togglePostLike(post)"
+            >
               <i class="fas" :class="post.liked ? 'fa-heart' : 'fa-heart fa-regular'"></i>
               <span>{{ post.likeCount }}</span>
-            </span>
+            </button>
+            <button
+              class="engagement-button"
+              :class="post.favorited ? 'engagement-favorite-on' : ''"
+              title="收藏"
+              @click.stop="togglePostFavorite(post)"
+            >
+              <i class="fas" :class="post.favorited ? 'fa-star' : 'fa-star fa-regular'"></i>
+              <span>{{ post.favoriteCount }}</span>
+            </button>
             <span class="engagement-button" title="评论数">
               <i class="fas fa-comment-dots"></i>
               <span>{{ post.commentCount }}</span>
@@ -198,14 +212,15 @@
     <!-- Tab 3: 关注动态 -->
     <section v-else class="bg-white rounded-lg shadow-md p-6">
       <h2 class="text-xl font-semibold text-gray-800 mb-4">关注动态</h2>
+      <p class="text-sm text-slate-400 mb-4">这里展示的是你关注的博主，点击博主查看他分享的全部项目。</p>
 
       <div v-if="loading" class="py-10 text-center text-gray-400">
         <i class="fas fa-circle-notch fa-spin text-2xl"></i>
       </div>
 
-      <div v-else-if="!feedItems.length" class="border border-dashed border-slate-300 rounded-lg p-10 text-center text-gray-500">
+      <div v-else-if="!bloggers.length" class="border border-dashed border-slate-300 rounded-lg p-10 text-center text-gray-500">
         <i class="fas fa-users-viewfinder text-3xl mb-3 text-blue-500"></i>
-        <p class="mb-4">你还没有关注任何人。去项目或帖子里关注感兴趣的作者，他们的新分享会出现在这里。</p>
+        <p class="mb-4">你还没有关注任何人。去项目或帖子里关注感兴趣的博主，他们会出现在这里。</p>
         <button class="btn-primary" @click="switchTab('projects')">
           <i class="fas fa-box-open mr-2"></i>去广场逛逛
         </button>
@@ -213,26 +228,36 @@
 
       <div v-else class="space-y-4">
         <article
-          v-for="item in feedItems"
-          :key="item.itemType + '-' + item.id"
+          v-for="blogger in bloggers"
+          :key="blogger.id"
           class="post-card border border-slate-200 rounded-xl p-5 bg-slate-50 hover:bg-white transition-colors cursor-pointer"
-          @click="openFeedItem(item)"
+          @click="openBlogger(blogger)"
         >
-          <div class="flex items-center gap-2 mb-2">
-            <span
-              class="text-xs rounded-full px-2 py-0.5"
-              :class="item.itemType === 'project' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'"
+          <div class="flex items-center gap-4 flex-wrap">
+            <div
+              class="w-14 h-14 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xl font-bold shrink-0"
             >
-              <i class="fas mr-1" :class="item.itemType === 'project' ? 'fa-box-open' : 'fa-comment'"></i>
-              {{ item.itemType === 'project' ? '新项目' : '新帖子' }}
+              {{ (blogger.username || '?').charAt(0).toUpperCase() }}
+            </div>
+            <div class="min-w-0 flex-1">
+              <h3 class="text-lg font-bold text-slate-800 truncate">
+                {{ blogger.username }}
+                <i class="fas fa-circle-check text-blue-500 text-sm ml-1" title="已关注"></i>
+              </h3>
+              <p class="text-xs text-slate-400 mt-1">
+                分享项目 {{ blogger.projectCount }} · 帖子 {{ blogger.postCount }} · 粉丝 {{ blogger.followerCount }}
+              </p>
+            </div>
+            <span class="text-sm text-slate-400 shrink-0">
+              <i class="fas fa-arrow-right mr-1"></i>查看主页
             </span>
-            <span class="text-xs text-slate-400">{{ formatDate(item.createdAt) }}</span>
           </div>
-          <h3 class="text-lg font-bold text-slate-800">{{ item.title }}</h3>
-          <p class="text-sm text-slate-500 mt-2">
-            <i class="fas fa-circle-user text-blue-500 mr-1"></i>
-            {{ item.author.username }}
-          </p>
+          <div v-if="blogger.latestProject || blogger.latestPost" class="mt-3 pt-3 border-t border-slate-200">
+            <p class="text-xs text-slate-400">
+              <i class="fas mr-1" :class="blogger.latestProject ? 'fa-box-open text-blue-500' : 'fa-comments text-purple-500'"></i>
+              最新{{ blogger.latestProject ? '分享' : '帖子' }}：{{ blogger.latestProject || blogger.latestPost }}
+            </p>
+          </div>
         </article>
       </div>
     </section>
@@ -292,7 +317,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   createPost,
-  getFeed,
+  listMyFollowing,
   listPosts,
   listProjects,
   setFavorite,
@@ -320,7 +345,7 @@ const posts = ref([])
 const postSearchQuery = ref('')
 let postSearchTimer = null
 
-const feedItems = ref([])
+const bloggers = ref([])
 
 const showCreatePost = ref(false)
 const postForm = ref({ title: '', content: '' })
@@ -354,7 +379,7 @@ async function switchTab(key) {
   } else if (key === 'posts') {
     await loadPosts()
   } else {
-    await loadFeed()
+    await loadFollowing()
   }
 }
 
@@ -382,11 +407,11 @@ async function loadPosts() {
   }
 }
 
-async function loadFeed() {
+async function loadFollowing() {
   loading.value = true
   try {
-    const data = await getFeed()
-    feedItems.value = data.items || []
+    const data = await listMyFollowing()
+    bloggers.value = data.items || []
   } catch (error) {
     showStatus(error.message || '加载关注动态失败', 'error')
   } finally {
@@ -430,6 +455,28 @@ async function toggleProjectFavorite(project) {
   }
 }
 
+async function togglePostLike(post) {
+  try {
+    const next = !post.liked
+    const result = await setLike('post', post.id, next)
+    post.liked = result.liked
+    post.likeCount = result.count
+  } catch (error) {
+    showStatus(error.message || '操作失败', 'error')
+  }
+}
+
+async function togglePostFavorite(post) {
+  try {
+    const next = !post.favorited
+    const result = await setFavorite('post', post.id, next)
+    post.favorited = result.favorited
+    post.favoriteCount = result.count
+  } catch (error) {
+    showStatus(error.message || '操作失败', 'error')
+  }
+}
+
 function openProject(project) {
   router.push(`/community/projects/${project.id}`)
 }
@@ -438,12 +485,9 @@ function openPost(post) {
   router.push(`/community/posts/${post.id}`)
 }
 
-function openFeedItem(item) {
-  if (item.itemType === 'project') {
-    router.push(`/community/projects/${item.id}`)
-  } else {
-    router.push(`/community/posts/${item.id}`)
-  }
+function openBlogger(blogger) {
+  // 关注动态关注的是博主本人，点卡片进入博主主页
+  router.push(`/community/users/${blogger.id}`)
 }
 
 function openCreatePost() {
@@ -573,6 +617,9 @@ onBeforeUnmount(() => {
 }
 .engagement-on {
   color: #e11d48;
+}
+.engagement-favorite-on {
+  color: #d97706;
 }
 .top-toast {
   position: fixed;

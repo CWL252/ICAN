@@ -170,6 +170,102 @@
       </div>
     </section>
 
+    <!-- 我的收藏 -->
+    <section v-else-if="activeTab === 'favorites'" class="bg-white rounded-lg shadow-md p-6">
+      <div v-if="loading" class="py-10 text-center text-gray-400">
+        <i class="fas fa-circle-notch fa-spin text-xl"></i>
+      </div>
+      <div v-else-if="!favorites.length" class="py-10 text-center text-gray-500">
+        <i class="fas fa-star text-3xl mb-3 text-amber-400"></i>
+        <p>还没有收藏过任何项目或帖子。</p>
+        <router-link to="/community" class="btn-primary inline-block mt-4">
+          <i class="fas fa-box-open mr-2"></i>去广场逛逛
+        </router-link>
+      </div>
+      <div v-else class="space-y-3">
+        <div
+          v-for="item in favorites"
+          :key="'favorite-' + item.targetType + '-' + item.targetId"
+          class="border border-slate-200 rounded-xl p-4 flex justify-between items-center gap-3 flex-wrap"
+        >
+          <div class="min-w-0">
+            <p class="font-semibold text-slate-800 truncate">
+              <i
+                class="fas mr-2"
+                :class="item.targetType === 'project' ? 'fa-box-open text-blue-500' : 'fa-comments text-purple-500'"
+              ></i>
+              {{ item.targetTitle }}
+            </p>
+            <p class="text-xs text-slate-400 mt-1">
+              {{ formatDate(item.createdAt) }} ·
+              <button
+                class="hover:text-blue-600 transition-colors"
+                @click="router.push(`/community/users/${item.targetAuthorId}`)"
+              >
+                {{ item.targetAuthor }}
+              </button>
+            </p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0 flex-wrap">
+            <button class="btn-secondary" @click="router.push(engagementRoute(item))">
+              <i class="fas fa-eye mr-1"></i>查看
+            </button>
+            <button class="btn-danger" @click="removeFavorite(item)">
+              <i class="fas fa-star mr-1"></i>取消收藏
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 我的点赞 -->
+    <section v-else-if="activeTab === 'likes'" class="bg-white rounded-lg shadow-md p-6">
+      <div v-if="loading" class="py-10 text-center text-gray-400">
+        <i class="fas fa-circle-notch fa-spin text-xl"></i>
+      </div>
+      <div v-else-if="!likes.length" class="py-10 text-center text-gray-500">
+        <i class="fas fa-heart text-3xl mb-3 text-rose-400"></i>
+        <p>还没有点赞过任何项目或帖子。</p>
+        <router-link to="/community" class="btn-primary inline-block mt-4">
+          <i class="fas fa-box-open mr-2"></i>去广场逛逛
+        </router-link>
+      </div>
+      <div v-else class="space-y-3">
+        <div
+          v-for="item in likes"
+          :key="'like-' + item.targetType + '-' + item.targetId"
+          class="border border-slate-200 rounded-xl p-4 flex justify-between items-center gap-3 flex-wrap"
+        >
+          <div class="min-w-0">
+            <p class="font-semibold text-slate-800 truncate">
+              <i
+                class="fas mr-2"
+                :class="item.targetType === 'project' ? 'fa-box-open text-blue-500' : 'fa-comments text-purple-500'"
+              ></i>
+              {{ item.targetTitle }}
+            </p>
+            <p class="text-xs text-slate-400 mt-1">
+              {{ formatDate(item.createdAt) }} ·
+              <button
+                class="hover:text-blue-600 transition-colors"
+                @click="router.push(`/community/users/${item.targetAuthorId}`)"
+              >
+                {{ item.targetAuthor }}
+              </button>
+            </p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0 flex-wrap">
+            <button class="btn-secondary" @click="router.push(engagementRoute(item))">
+              <i class="fas fa-eye mr-1"></i>查看
+            </button>
+            <button class="btn-danger" @click="removeLike(item)">
+              <i class="fas fa-heart mr-1"></i>取消点赞
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- 我的评论 -->
     <section v-else class="bg-white rounded-lg shadow-md p-6">
       <div v-if="loading" class="py-10 text-center text-gray-400">
@@ -221,8 +317,12 @@ import {
   deleteProject,
   listComments,
   listMyComments,
+  listMyFavorites,
+  listMyLikes,
   listPosts,
   listProjects,
+  setFavorite,
+  setLike,
 } from '../api/community'
 
 const router = useRouter()
@@ -231,6 +331,8 @@ const tabs = [
   { key: 'projects', label: '我的项目', icon: 'fa-box-open' },
   { key: 'posts', label: '我的帖子', icon: 'fa-comments' },
   { key: 'comments', label: '我的评论', icon: 'fa-comment-dots' },
+  { key: 'favorites', label: '我的收藏', icon: 'fa-star' },
+  { key: 'likes', label: '我的点赞', icon: 'fa-heart' },
 ]
 
 const activeTab = ref('projects')
@@ -238,6 +340,8 @@ const loading = ref(false)
 const projects = ref([])
 const posts = ref([])
 const comments = ref([])
+const favorites = ref([])
+const likes = ref([])
 
 // 评论管理面板状态
 const manageTarget = ref(null) // { type: 'project' | 'post', id, title }
@@ -274,6 +378,10 @@ async function switchTab(key) {
       projects.value = (await listProjects({ mine: true })).items || []
     } else if (key === 'posts') {
       posts.value = (await listPosts({ mine: true })).items || []
+    } else if (key === 'favorites') {
+      favorites.value = (await listMyFavorites()).items || []
+    } else if (key === 'likes') {
+      likes.value = (await listMyLikes()).items || []
     } else {
       comments.value = (await listMyComments()).items || []
     }
@@ -289,6 +397,39 @@ function targetRoute(comment) {
     return `/community/posts/${comment.targetId}`
   }
   return `/community/projects/${comment.targetId}`
+}
+
+function engagementRoute(item) {
+  if (item.targetType === 'post') {
+    return `/community/posts/${item.targetId}`
+  }
+  return `/community/projects/${item.targetId}`
+}
+
+async function removeFavorite(item) {
+  if (!window.confirm(`取消收藏「${item.targetTitle}」吗？`)) return
+  try {
+    await setFavorite(item.targetType, item.targetId, false)
+    favorites.value = favorites.value.filter(
+      (entry) => !(entry.targetType === item.targetType && entry.targetId === item.targetId)
+    )
+    showStatus('已取消收藏')
+  } catch (error) {
+    showStatus(error.message || '操作失败，请稍后重试', 'error')
+  }
+}
+
+async function removeLike(item) {
+  if (!window.confirm(`取消点赞「${item.targetTitle}」吗？`)) return
+  try {
+    await setLike(item.targetType, item.targetId, false)
+    likes.value = likes.value.filter(
+      (entry) => !(entry.targetType === item.targetType && entry.targetId === item.targetId)
+    )
+    showStatus('已取消点赞')
+  } catch (error) {
+    showStatus(error.message || '操作失败，请稍后重试', 'error')
+  }
 }
 
 // ------------------------------------------------------------- 评论管理

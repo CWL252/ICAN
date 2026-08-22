@@ -13,10 +13,10 @@
 | 社区功能 | ❌ 完全没有 | ✅ 开源广场、讨论区、评论、关注、视频分享、我的社区 |
 | 数据库 | ❌ 无（任务状态存 JSON 文件） | ✅ SQLite（users / sessions + 6 张社区表） |
 | 后端端点 | 4 个 | 30+ 个 |
-| 前端视图 | 3 个（Splash / Home / Analysis） | 8 个（+ Login / Community / ProjectDetail / PostDetail / MyCommunity） |
+| 前端视图 | 3 个（Splash / Home / Analysis） | 9 个（+ Login / Community / ProjectDetail / PostDetail / MyCommunity / AuthorProfile） |
 | 人工标记片段 | ❌ 无 | ✅ 手动编辑、拖拽调边界、展示优先级 |
 | 真实分割 | ❌ 前端几何模拟 | ✅ 后端 /api/segment 真实推理 |
-| 文件规模 | 前端 ~2900 行核心页 | 后端 community.py 1224 行 + auth.py 324 行 + 前端新增 ~4000 行 |
+| 文件规模 | 前端 ~2900 行核心页 | 后端 community.py 1330 行 + auth.py 324 行 + 前端新增 ~4000 行 |
 
 ---
 
@@ -32,12 +32,12 @@
 - **接口**：`POST /api/auth/register`（用户名 + 邮箱 + 密码）、`POST /api/auth/login`（用户名**或**邮箱均可，字段名 `identifier`）、`GET /api/auth/me`、`POST /api/auth/logout`
 - **鉴权依赖**：`get_current_user` 注入每个社区端点；前端 401 时统一 `handleUnauthorized()` 清登录态跳回登录页
 
-### 2.2 新增社区后端（community.py，1224 行）
+### 2.2 新增社区后端（community.py，1330 行）
 
 全部接口前缀 `/api/community`，除视频播放外均要求 `Authorization: Bearer`：
 
 **项目分享**
-- `GET /projects` —— 列表，支持 `q` 关键词（标题/描述/术式/作者名）、`sort=popular`（按点赞数排序）、分页、**`mine=true` 只看自己的**
+- `GET /projects` —— 列表，支持 `q` 关键词（标题/描述/术式/作者名）、`sort=popular`（按点赞数排序）、分页、**`mine=true` 只看自己的**、**`author_id=` 只看某位作者的**（博主主页用）
 - `POST /projects` —— 分享项目（元数据 + 阶段分析结果 JSON）
 - `GET /projects/{id}` / `PUT /projects/{id}` / `DELETE /projects/{id}` —— 详情 / 更新 / 删除（属主校验；删除时连带清理视频文件与点赞收藏关注）
 
@@ -54,7 +54,8 @@
 - `POST/DELETE /projects/{id}/like`、`/posts/{id}/like` —— 点赞（UNION ALL 查询注意显式 AS 别名）
 - `POST/DELETE /projects/{id}/favorite`、`/posts/{id}/favorite` —— 收藏
 - `POST/DELETE /users/{id}/follow`、`GET /users/{id}/profile` —— 关注与主页
-- `GET /feed` —— 关注动态流（点赞/评论/分享聚合）
+- `GET /me/favorites`、`GET /me/likes` —— 我的收藏/点赞列表（LEFT JOIN 项目/帖子/作者，只返回仍存在的内容，附目标标题与作者名）
+- `GET /me/following` —— 我关注的博主列表（含项目数/帖子数/粉丝数/最近一条分享标题，按最近动态排序）
 
 **开源视频（核心新增）**
 - `PUT /projects/{id}/video` —— multipart 上传，**1GB 上限**（413 + 清理已写文件），1MB 分块写盘到 `runtime/videos/{project_id}{后缀}`，仅属主
@@ -188,9 +189,43 @@
 |---|---|---|---|
 | backend/app.py | ~170 行 | 274 行 | + 分割、注释合并端点 |
 | backend/auth.py | 无 | 324 行 | 用户系统 |
-| backend/community.py | 无 | 1224 行 | 社区全套 |
+| backend/community.py | 无 | 1330 行 | 社区全套 |
 | backend/sam_service.py | 无 | 124 行 | 真实分割 |
-| frontend views | 3 个 | 8 个 | + Login/Community/详情×2/MyCommunity |
+| frontend views | 3 个 | 9 个 | + Login/Community/详情×2/MyCommunity/AuthorProfile |
 | frontend components | 无 | 2 个 | 递归评论组件 |
 | frontend api/ | 2 个 | 5 个 | + auth/community/segment/chat 拆分 |
 | frontend lib/ | 无 | 2 个 | auth 登录态、markdown 渲染 |
+
+---
+
+## 八、V1.1 更新（2026-08-22）：关注关系与收藏体系
+
+在 V1 基础上补全"以博主为中心"的社交闭环，共 5 处改动：
+
+### 8.1 关注动态改为博主列表
+
+- **之前**：关注动态（feed）展示关注者的每一条项目/帖子（"新项目"“新帖子”卡片），点击卡片进对应内容详情
+- **现在**：关注动态展示**博主卡片列表**——头像、用户名、分享项目数 / 帖子数 / 粉丝数、最新一条分享标题；点击卡片进入**博主主页**，而非单条内容
+- 后端新增 `GET /me/following`：子查询统计每位博主的项目/帖子/粉丝数，`MAX(UNION ALL 时间)` 取最近动态排序（`NULLS LAST`）
+
+### 8.2 新增博主主页（AuthorProfile.vue，/community/users/:id）
+
+- 作者信息卡：头像（用户名首字母）、加入时间、关注按钮（未关注时"关注作者"，已关注显示"已关注"可取消，实时更新粉丝数）
+- 统计栏：分享项目 / 发帖 / 粉丝 / 关注 四格
+- 两个 tab：**分享的项目**（`GET /projects?author_id=`，含视频图标、点赞收藏数）与**帖子**（`GET /posts?author_id=`）
+- `list_projects` / `list_posts` 新增 `author_id` 过滤参数（conditions 拼接，可与其他条件组合）
+
+### 8.3 广场帖子卡片补全收藏
+
+- 之前帖子卡片只有点赞数和评论数展示（点赞不可点、无收藏）；现在点赞、**收藏**都可点击切换，收藏高亮琥珀色
+
+### 8.4 我的社区新增「我的收藏 / 我的点赞」
+
+- 两个新 tab，展示收藏/点赞过的项目与帖子：类型图标（项目蓝色/帖子紫色）、标题、作者（可点击跳博主主页）、时间
+- 每条可「查看」（跳详情页）或「取消收藏/取消点赞」（确认弹窗后本地移除）
+- 后端 `_my_engagement()` 统一实现：LEFT JOIN 项目/帖子/作者，**只返回仍存在的内容**（目标被删则不显示）
+
+### 8.5 修复：博主主页显示"用户不存在或已被删除"
+
+- 原因：`user_profile` 接口直接返回 `{user, stats, isFollowing, isSelf, ...}`（无 `.item` 包装），AuthorProfile 却取了 `.item` → `undefined` 被当成 404
+- 修复：去掉 `.item` 直接取返回值（与 ProjectDetail / PostDetail 的用法保持一致）

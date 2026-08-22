@@ -352,6 +352,7 @@ def list_projects(
     limit: int = PAGE_SIZE,
     offset: int = 0,
     mine: bool = False,
+    author_id: Optional[int] = None,
     user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     limit = max(1, min(limit, 100))
@@ -369,6 +370,9 @@ def list_projects(
     if mine:
         conditions.append("p.user_id = ?")
         params.append(user["id"])
+    if author_id is not None:
+        conditions.append("p.user_id = ?")
+        params.append(author_id)
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
     if sort == "popular":
@@ -657,6 +661,7 @@ def list_posts(
     limit: int = PAGE_SIZE,
     offset: int = 0,
     mine: bool = False,
+    author_id: Optional[int] = None,
     user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     limit = max(1, min(limit, 100))
@@ -672,6 +677,9 @@ def list_posts(
     if mine:
         conditions.append("po.user_id = ?")
         params.append(user["id"])
+    if author_id is not None:
+        conditions.append("po.user_id = ?")
+        params.append(author_id)
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
     with _db() as db:
@@ -1221,4 +1229,102 @@ def get_feed(
             for r in rows
         ]
 
+    return {"items": items}
+
+
+# ---------------------------------------------------------------- my likes / favorites
+
+def _my_engagement(user: Dict[str, Any], table: str) -> Dict[str, Any]:
+    """当前用户的收藏或点赞列表(项目 + 帖子,含目标标题/作者)。"""
+    with _db() as db:
+        rows = db.execute(
+            f"""
+            SELECT l.target_type, l.target_id, l.created_at,
+                   COALESCE(p.title, po.title) AS target_title,
+                   COALESCE(p.user_id, po.user_id) AS target_author_id,
+                   COALESCE(pu.username, pou.username) AS target_author
+            FROM {table} l
+            LEFT JOIN community_projects p
+                ON p.id = l.target_id AND l.target_type = 'project'
+            LEFT JOIN posts po
+                ON po.id = l.target_id AND l.target_type = 'post'
+            LEFT JOIN users pu ON pu.id = p.user_id
+            LEFT JOIN users pou ON pou.id = po.user_id
+            WHERE l.user_id = ? AND (p.id IS NOT NULL OR po.id IS NOT NULL)
+            ORDER BY l.created_at DESC
+            """,
+            (user["id"],),
+        ).fetchall()
+        items = [
+            {
+                "targetType": r["target_type"],
+                "targetId": r["target_id"],
+                "targetTitle": r["target_title"] or "",
+                "targetAuthorId": r["target_author_id"],
+                "targetAuthor": r["target_author"] or "",
+                "createdAt": r["created_at"],
+                "favorited": table == "favorites",
+                "liked": table == "likes",
+            }
+            for r in rows
+        ]
+    return {"items": items}
+
+
+@router.get("/me/favorites")
+def my_favorites(
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return _my_engagement(user, "favorites")
+
+
+@router.get("/me/likes")
+def my_likes(
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return _my_engagement(user, "likes")
+
+
+@router.get("/me/following")
+def my_following(
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """我关注的博主列表(带统计与最近动态)。"""
+    with _db() as db:
+        rows = db.execute(
+            """
+            SELECT u.id, u.username, u.created_at,
+                   (SELECT COUNT(*) FROM community_projects p WHERE p.user_id = u.id) AS project_count,
+                   (SELECT COUNT(*) FROM posts po WHERE po.user_id = u.id) AS post_count,
+                   (SELECT COUNT(*) FROM follows f WHERE f.followee_id = u.id) AS follower_count,
+                   (SELECT p.title FROM community_projects p
+                    WHERE p.user_id = u.id ORDER BY p.created_at DESC LIMIT 1) AS latest_project,
+                   (SELECT po.title FROM posts po
+                    WHERE po.user_id = u.id ORDER BY po.created_at DESC LIMIT 1) AS latest_post,
+                   (SELECT MAX(x) FROM (
+                       SELECT p.created_at AS x FROM community_projects p WHERE p.user_id = u.id
+                       UNION ALL
+                       SELECT po.created_at AS x FROM posts po WHERE po.user_id = u.id
+                   )) AS latest_at
+            FROM follows f
+            JOIN users u ON u.id = f.followee_id
+            WHERE f.follower_id = ?
+            ORDER BY latest_at DESC NULLS LAST
+            """,
+            (user["id"],),
+        ).fetchall()
+        items = [
+            {
+                "id": r["id"],
+                "username": r["username"],
+                "createdAt": r["created_at"],
+                "projectCount": r["project_count"],
+                "postCount": r["post_count"],
+                "followerCount": r["follower_count"],
+                "latestProject": r["latest_project"] or "",
+                "latestPost": r["latest_post"] or "",
+                "latestAt": r["latest_at"] or "",
+            }
+            for r in rows
+        ]
     return {"items": items}

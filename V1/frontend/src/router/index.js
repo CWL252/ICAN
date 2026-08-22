@@ -8,6 +8,7 @@ import Community from '../views/Community.vue'
 import ProjectDetail from '../views/ProjectDetail.vue'
 import PostDetail from '../views/PostDetail.vue'
 import MyCommunity from '../views/MyCommunity.vue'
+import AuthorProfile from '../views/AuthorProfile.vue'
 
 import { getToken } from '../lib/auth'
 
@@ -69,6 +70,14 @@ const routes = [
     path: '/community/mine',
     name: 'MyCommunity',
     component: MyCommunity,
+    meta: {
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/community/users/:id',
+    name: 'AuthorProfile',
+    component: AuthorProfile,
     meta: {
       requiresAuth: true
     }
