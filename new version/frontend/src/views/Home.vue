@@ -60,11 +60,19 @@
               <h3 class="text-lg font-bold text-slate-800">{{ project.title }}</h3>
               <p class="text-sm text-slate-500 mt-1">{{ project.procedure || '未填写术式' }}</p>
             </div>
-            <span
-              class="text-xs rounded-full px-3 py-1"
-              :class="statusClass(project.status)"
-            >
-              {{ project.status || '待分析' }}
+            <span class="flex items-center gap-2 shrink-0">
+              <span
+                v-if="getSharedCommunityId(project.id)"
+                class="text-xs rounded-full px-3 py-1 bg-emerald-100 text-emerald-700"
+              >
+                <i class="fas fa-share-nodes mr-1"></i>已分享
+              </span>
+              <span
+                class="text-xs rounded-full px-3 py-1"
+                :class="statusClass(project.status)"
+              >
+                {{ project.status || '待分析' }}
+              </span>
             </span>
           </div>
 
@@ -91,12 +99,26 @@
             {{ project.description }}
           </p>
 
-          <div class="flex gap-3 mt-5">
+          <div class="flex gap-3 mt-5 flex-wrap">
             <button class="btn-secondary" @click.stop="removeProjectItem(project)">
               <i class="fas fa-trash mr-2"></i>删除项目
             </button>
             <button class="btn-secondary" @click.stop="editProject(project)">
               <i class="fas fa-copy mr-2"></i>修改信息
+            </button>
+            <button
+              class="btn-secondary"
+              @click.stop="openShareModal(project)"
+            >
+              <i class="fas fa-share-nodes mr-2"></i>
+              {{ getSharedCommunityId(project.id) ? '更新分享' : '分享到社区' }}
+            </button>
+            <button
+              v-if="getSharedCommunityId(project.id)"
+              class="btn-secondary text-red-600"
+              @click.stop="cancelShare(project)"
+            >
+              <i class="fas fa-ban mr-2"></i>取消分享
             </button>
           </div>
         </article>
@@ -193,6 +215,113 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showShareModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
+      <div class="modal-panel bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-800">
+              {{ isSharedProject ? '更新社区分享' : '分享到社区' }}
+            </h2>
+            <p class="text-sm text-slate-500 mt-1">
+              分享后其他用户可以浏览、点赞、收藏并评论你的项目。
+            </p>
+          </div>
+          <button class="text-slate-400 hover:text-slate-700" @click="closeShareModal">
+            <i class="fas fa-xmark text-2xl"></i>
+          </button>
+        </div>
+
+        <div class="p-6 space-y-4">
+          <div>
+            <label class="input-label">分享标题 <span class="required-mark">*</span></label>
+            <input
+              v-model="shareForm.title"
+              class="input"
+              :class="shareErrors.title ? 'input-error' : ''"
+              placeholder="社区里展示的项目名称"
+              @input="shareErrors.title = ''"
+            />
+            <p v-if="shareErrors.title" class="field-error">{{ shareErrors.title }}</p>
+          </div>
+          <div>
+            <label class="input-label">项目分类 <span class="required-mark">*</span></label>
+            <div class="grid grid-cols-2 gap-3">
+              <select v-model="shareForm.category" class="input" @change="onCategoryGroupChange">
+                <option v-for="group in categoryGroups" :key="group.name" :value="group.name">
+                  {{ group.name }}
+                </option>
+              </select>
+              <select v-model="shareForm.subcategory" class="input">
+                <option v-for="sub in currentSubcategories" :key="sub" :value="sub">
+                  {{ sub }}
+                </option>
+              </select>
+            </div>
+            <p class="text-xs text-slate-400 mt-1.5">先选大类，再选具体术式，方便大家在开源广场按分类浏览。</p>
+          </div>
+          <div>
+            <label class="input-label">项目描述</label>
+            <textarea
+              v-model="shareForm.description"
+              class="input min-h-[100px]"
+              placeholder="向社区介绍这个病例的背景、看点或分析心得"
+            ></textarea>
+          </div>
+
+          <div v-if="hasAnalysisResult" class="border border-slate-200 rounded-xl p-4 bg-slate-50">
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input v-model="shareIncludePredictions" type="checkbox" class="w-4 h-4 accent-blue-600" />
+              <span class="text-sm font-semibold text-slate-700">包含逐帧预测数据</span>
+            </label>
+            <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+              逐帧预测数据体积较大（可能超过 2MB 上限）。不勾选时仅分享阶段分析结果、
+              人工修正片段与器械统计，社区详情页仍可正常展示分析结论。
+            </p>
+          </div>
+
+          <div v-else class="border border-amber-200 rounded-xl p-4 bg-amber-50 text-sm text-amber-700">
+            <i class="fas fa-circle-info mr-1"></i>
+            该项目还没有分析结果，将只分享元数据信息。
+          </div>
+
+          <div v-if="shareProjectHasVideo" class="border border-slate-200 rounded-xl p-4 bg-slate-50">
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input v-model="shareIncludeVideo" type="checkbox" class="w-4 h-4 accent-blue-600" />
+              <span class="text-sm font-semibold text-slate-700">包含手术视频</span>
+            </label>
+            <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+              手术视频将上传到社区服务器（可能较大，上限 1GB），其他登录用户可在线播放。
+            </p>
+          </div>
+
+          <div v-if="sharingPhase === 'video'" class="border border-blue-200 rounded-xl p-4 bg-blue-50">
+            <div class="flex justify-between text-xs text-blue-700 mb-2">
+              <span><i class="fas fa-upload mr-1"></i>正在上传手术视频</span>
+              <span class="font-bold">{{ shareUploadProgress }}%</span>
+            </div>
+            <div class="h-2 bg-white rounded-full overflow-hidden">
+              <div
+                class="h-full bg-blue-600 transition-all duration-150"
+                :style="{ width: `${shareUploadProgress}%` }"
+              ></div>
+            </div>
+          </div>
+
+          <div class="flex gap-3">
+            <button class="btn-primary" :disabled="shareSubmitting" @click="submitShare">
+              <i class="fas fa-share-nodes mr-2"></i>
+              <template v-if="sharingPhase === 'video'">上传视频 {{ shareUploadProgress }}%...</template>
+              <template v-else-if="shareSubmitting">分享中...</template>
+              <template v-else>{{ isSharedProject ? '保存更新' : '发布分享' }}</template>
+            </button>
+            <button class="btn-secondary" :disabled="shareSubmitting" @click="closeShareModal">
+              <i class="fas fa-arrow-left mr-2"></i>取消
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -202,6 +331,18 @@ import { useRouter } from 'vue-router'
 import { deleteProject, getProjects, saveProject, setActiveProject } from '../projectStore'
 import { syncRunningProjectsPhaseAnalysis } from '../phaseAnalysisStore'
 import { deleteProjectVideo, getProjectVideo, saveProjectVideo } from '../videoStore'
+import {
+  deleteProject as deleteCommunityProject,
+  listCategories,
+  shareProject,
+  updateProject as updateCommunityProject,
+  uploadProjectVideo,
+} from '../api/community'
+import {
+  getSharedCommunityId,
+  removeSharedProject,
+  setSharedCommunityId,
+} from '../communityShareStore'
 
 const router = useRouter()
 const projects = ref([])
@@ -213,9 +354,38 @@ const selectedVideoFile = ref(null)
 const statusMessage = ref('')
 const statusType = ref('success')
 const editingProjectId = ref('')
+const showShareModal = ref(false)
+const shareProjectId = ref('')
+const shareForm = ref({ title: '', category: '肝胆外科', subcategory: '胆囊切除术', description: '' })
+const categoryGroups = ref([])
+const currentSubcategories = computed(() => {
+  const group = categoryGroups.value.find((g) => g.name === shareForm.value.category)
+  return group ? group.items : []
+})
+
+function onCategoryGroupChange() {
+  const subs = currentSubcategories.value
+  shareForm.value.subcategory = subs.length ? subs[0] : ''
+}
+const shareErrors = ref({ title: '' })
+const shareIncludePredictions = ref(false)
+const shareIncludeVideo = ref(true)
+const shareUploadProgress = ref(0)
+const sharingPhase = ref('') // '' | 'metadata' | 'video'
+const shareSubmitting = ref(false)
 let syncTimer = null
 let durationReadPromise = null
 let statusTimer = null
+
+const isSharedProject = computed(() => Boolean(getSharedCommunityId(shareProjectId.value)))
+const hasAnalysisResult = computed(() => {
+  const project = projects.value.find((item) => item.id === shareProjectId.value)
+  return Boolean(project?.phaseAnalysis?.result)
+})
+const shareProjectHasVideo = computed(() => {
+  const project = projects.value.find((item) => item.id === shareProjectId.value)
+  return Boolean(project?.hasVideo)
+})
 
 const describedCount = computed(() => projects.value.filter((item) => item.description).length)
 const latestUpdated = computed(() => projects.value[0]?.updatedAtLabel || '暂无')
@@ -441,14 +611,229 @@ async function editProject(project) {
 }
 
 async function removeProjectItem(project) {
+  // 若该项目已分享到社区，同步取消分享（后端会连带删除视频文件），避免留下孤儿数据
+  const communityProjectId = getSharedCommunityId(project.id)
   await deleteProjectVideo(project.id)
   deleteProject(project.id)
+  if (communityProjectId) {
+    try {
+      await deleteCommunityProject(communityProjectId)
+      removeSharedProject(project.id)
+    } catch (error) {
+      showStatus(`本地项目已删除，但取消社区分享失败：${error.message || '请稍后重试'}`, 'error')
+    }
+  }
   loadProjects()
+}
+
+function openShareModal(project) {
+  shareProjectId.value = project.id
+  shareForm.value = {
+    title: project.title || '',
+    category: '肝胆外科',
+    subcategory: '胆囊切除术',
+    description: project.description || '',
+  }
+  shareErrors.value = { title: '' }
+  shareIncludePredictions.value = false
+  shareIncludeVideo.value = Boolean(project.hasVideo)
+  shareUploadProgress.value = 0
+  sharingPhase.value = ''
+  showShareModal.value = true
+}
+
+function closeShareModal() {
+  showShareModal.value = false
+  shareProjectId.value = ''
+}
+
+function buildSharePayload(project) {
+  const phaseAnalysis = project.phaseAnalysis || null
+  let phasePayload = null
+
+  if (phaseAnalysis) {
+    const result = phaseAnalysis.result || null
+    const clippedResult = result ? { ...result } : null
+    // 逐帧预测数据体积大，默认裁剪，仅保留阶段结论相关字段
+    if (clippedResult && !shareIncludePredictions.value) {
+      delete clippedResult.predictions
+    }
+    phasePayload = {
+      result: clippedResult,
+      editedSegments: phaseAnalysis.editedSegments || [],
+      instrumentStats: project.instrumentStats || null,
+      report: buildShareReport(project),
+    }
+  }
+
+  return {
+    title: shareForm.value.title.trim(),
+    category: shareForm.value.category || '肝胆外科',
+    subcategory: shareForm.value.subcategory || '胆囊切除术',
+    procedure: project.procedure || '',
+    surgeon: project.surgeon || '',
+    department: project.department || '',
+    date: project.date || '',
+    duration: project.duration || '',
+    description: shareForm.value.description.trim(),
+    fileName: project.fileName || '',
+    status: project.status || '分析完成',
+    phaseAnalysis: phasePayload,
+  }
+}
+
+// 分享时携带完整 AI 分析报告(总结/关键指标/操作评估/关键问题/改进建议),与本地分析页报告逻辑一致
+function buildShareReport(project) {
+  const result = project.phaseAnalysis?.result || null
+  const steps = result?.steps || []
+  const stepCount = project.phaseAnalysis?.editedSegments?.length || steps.length
+  const instrumentItems = project.instrumentStats?.items || []
+  const statsLoading = project.instrumentStats?.status === 'loading'
+  const hasVideo = Boolean(project.hasVideo)
+  const durationSeconds = result?.meta?.durationSeconds || 0
+
+  // 总结(与本地分析页 reportSummary 一致)
+  const summary = hasVideo
+    ? stepCount
+      ? `已识别 ${stepCount} 个关键步骤，结合器械统计和异常检测结果形成当前报告。`
+      : '视频已加载，可先执行关键步骤分析，报告内容会结合异常检测和器械统计自动汇总。'
+    : '当前项目尚未上传视频，上传后会在这里生成分析摘要。'
+
+  // 关键指标(与本地分析页 reportMetrics 一致)
+  const metrics = [
+    { label: '视频时长', value: formatReportDuration(durationSeconds) },
+    { label: '关键步骤', value: `${stepCount} 个` },
+    { label: '异常检测', value: '待接入' },
+    {
+      label: '器械类型',
+      value: statsLoading ? '统计中' : instrumentItems.length ? `${instrumentItems.length} 类` : '待统计',
+    },
+  ]
+
+  const operationAssessment = hasVideo
+    ? [
+        '胆囊切除流程整体符合腹腔镜胆囊切除术的常规路径，画面推进围绕胆囊牵拉、胆囊三角显露、管道处理和胆囊床分离等关键阶段展开。',
+        steps.length
+          ? `系统已识别 ${steps.length} 个关键步骤，可用于术后复盘和教学定位。`
+          : '关键步骤识别尚未完成，当前操作评估以预设模板展示。',
+        instrumentItems.length
+          ? '器械使用以抓持、分离和电凝相关器械为主，使用频率分布与胆囊切除术常见操作节奏基本一致。'
+          : '器械统计结果尚未完成，暂无法对器械切换节奏进行量化判断。',
+      ]
+    : ['尚未上传视频，暂无法形成操作评估。']
+
+  const keyIssues = hasVideo
+    ? [
+        steps.length
+          ? '关键步骤结果仍需结合原始视频逐段复核，尤其关注胆囊三角显露和夹闭前确认阶段。'
+          : '关键步骤尚未完成识别，阶段性风险点仍需等待模型输出。',
+        statsLoading
+          ? '器械统计仍在进行中，暂不能判断是否存在器械使用时间异常。'
+          : '器械使用频率目前仅反映出现时长，尚不能直接判断操作质量或器械使用合理性。',
+        '当前报告为 AI 分析内容，结论应作为复盘线索，不能替代术者和上级医师的专业判断。',
+      ]
+    : ['当前项目未上传视频，无法定位关键问题。']
+
+  const improvementSuggestions = hasVideo
+    ? [
+        '建议术者在胆囊三角处理阶段持续保持清晰暴露，夹闭或离断前重点复核胆囊管、胆囊动脉及周围组织关系。',
+        '建议在牵拉胆囊颈部和分离胆囊床时控制牵拉力度与电凝范围，减少组织撕裂、热损伤和渗血风险。',
+        '若术中出现烟雾、镜头污染或视野遮挡，应及时清理镜头并恢复稳定视野后再继续关键操作。',
+        '术后复盘时建议重点回看关键步骤时间段，关注夹闭前确认、出血处理、胆囊床分离完整性和器械切换节奏。',
+      ]
+    : ['请先上传手术视频，再生成完整分析报告。']
+
+  return { summary, metrics, operationAssessment, keyIssues, improvementSuggestions }
+}
+
+// 秒 → mm:ss(与本地分析页 formatTimeLabel 一致)
+function formatReportDuration(secondsValue) {
+  const total = Math.max(0, Math.round(Number(secondsValue) || 0))
+  const minutes = Math.floor(total / 60)
+  const seconds = total % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+async function submitShare() {
+  if (!shareForm.value.title.trim()) {
+    shareErrors.value.title = '请填写分享标题'
+    showStatus('请先填写必填项：分享标题', 'error')
+    return
+  }
+
+  const project = projects.value.find((item) => item.id === shareProjectId.value)
+  if (!project) return
+
+  shareSubmitting.value = true
+  try {
+    const existingCommunityId = getSharedCommunityId(project.id)
+    const payload = buildSharePayload(project)
+
+    // 第一步:分享/更新元数据
+    sharingPhase.value = 'metadata'
+    let communityId = existingCommunityId
+    if (existingCommunityId) {
+      await updateCommunityProject(existingCommunityId, payload)
+    } else {
+      const data = await shareProject(payload)
+      communityId = data.item.id
+      setSharedCommunityId(project.id, communityId)
+    }
+
+    // 第二步:上传视频(失败不影响元数据分享,提示后重试即可)
+    if (shareIncludeVideo.value && project.hasVideo && communityId) {
+      sharingPhase.value = 'video'
+      try {
+        const file = await getProjectVideo(project.id)
+        if (file) {
+          await uploadProjectVideo(communityId, file, (percent) => {
+            shareUploadProgress.value = percent
+          })
+        }
+      } catch (videoError) {
+        showStatus(
+          `${existingCommunityId ? '分享已更新' : '已分享'}，但视频上传失败：${videoError.message || '请稍后重试'}`,
+          'error'
+        )
+        closeShareModal()
+        loadProjects()
+        return
+      }
+    }
+
+    showStatus(existingCommunityId ? '社区分享已更新' : '已分享到社区')
+    closeShareModal()
+    loadProjects()
+  } catch (error) {
+    showStatus(error.message || '分享失败，请稍后重试', 'error')
+  } finally {
+    shareSubmitting.value = false
+    sharingPhase.value = ''
+  }
+}
+
+async function cancelShare(project) {
+  const communityId = getSharedCommunityId(project.id)
+  if (!communityId) return
+
+  try {
+    await deleteCommunityProject(communityId)
+    removeSharedProject(project.id)
+    showStatus('已取消分享')
+    loadProjects()
+  } catch (error) {
+    showStatus(error.message || '取消分享失败', 'error')
+  }
 }
 
 onMounted(async () => {
   await syncRunningProjectsPhaseAnalysis()
   loadProjects()
+  try {
+    categoryGroups.value = (await listCategories()).groups || categoryGroups.value
+  } catch {
+    // 接口不可用时保留空分组,分享时后端兜底默认分类,不影响主流程
+  }
   syncTimer = window.setInterval(async () => {
     await syncRunningProjectsPhaseAnalysis()
     loadProjects()

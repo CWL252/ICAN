@@ -1,6 +1,7 @@
 frontend/node_modules/
 frontend/dist/
-backend/runtime/
+backend/runtime/*
+!backend/runtime/users.db
 backend/__pycache__/
 backend/*.pyc
 backend/pretrained_weights/
