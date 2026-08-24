@@ -244,6 +244,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class UpdateProfileRequest(BaseModel):
+    hospital: Optional[str] = None
+
+
 @router.post("/register")
 async def register(
     username: str = Form(...),
@@ -430,6 +434,40 @@ def logout(
 @router.get("/me")
 def me(user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     return user
+
+
+@router.post("/profile")
+def update_profile(
+    req: UpdateProfileRequest,
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """修改个人资料(个人主页"未填写医院"入口)。当前仅医院可改,
+    允许清空(回退为"未填写医院"),长度上限与注册一致。
+    """
+    hospital = (req.hospital or "").strip()
+    if len(hospital) > 60:
+        raise HTTPException(status_code=400, detail="医院名称长度不能超过 60 位")
+
+    with _db() as db:
+        db.execute(
+            "UPDATE users SET hospital = ? WHERE id = ?",
+            (hospital, user["id"]),
+        )
+        user_row = db.execute(
+            "SELECT id, username, email, created_at, hospital, license_file "
+            "FROM users WHERE id = ?",
+            (user["id"],),
+        ).fetchone()
+
+    return {
+        "id": user_row["id"],
+        "username": user_row["username"],
+        "email": user_row["email"],
+        "created_at": user_row["created_at"],
+        "hospital": user_row["hospital"] or "",
+        "licenseFile": user_row["license_file"] or "",
+        "hasLicense": bool(user_row["license_file"]),
+    }
 
 
 @router.post("/license")

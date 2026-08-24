@@ -25,7 +25,15 @@
             </div>
             <p class="text-gray-500 text-sm mt-1">{{ currentUser?.email }}</p>
             <p class="text-gray-500 text-sm mt-1">
-              <i class="fas fa-hospital mr-1 text-blue-400"></i>{{ currentUser?.hospital || '未填写医院' }}
+              <i class="fas fa-hospital mr-1 text-blue-400"></i>
+              <span
+                class="inline-flex items-center gap-1 cursor-pointer hover:text-sky-600 hover:underline"
+                :title="currentUser?.hospital ? '点击修改医院' : '点击填写医院'"
+                @click="openHospitalModal"
+              >
+                {{ currentUser?.hospital || '未填写医院' }}
+                <i class="fas fa-pen text-xs text-slate-300"></i>
+              </span>
             </p>
             <p class="text-gray-500 text-sm mt-1">
               <i class="fas fa-calendar mr-1 text-slate-400"></i>加入于 {{ formatJoinDate(currentUser?.created_at) }}
@@ -33,13 +41,23 @@
           </div>
           <div class="ml-auto shrink-0">
             <template v-if="currentUser?.hasLicense">
-              <img
-                :src="licenseUrl()"
-                alt="医师资格证"
-                class="w-28 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80"
-                title="点击查看大图"
-                @click="openLicenseImage()"
-              />
+              <div class="relative inline-block">
+                <img
+                  :src="licenseUrl()"
+                  alt="医师资格证"
+                  class="w-28 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80"
+                  title="点击查看大图"
+                  @click="openLicenseImage()"
+                />
+                <button
+                  class="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full bg-sky-500 text-white text-xs flex items-center justify-center shadow-md hover:bg-sky-600 transition"
+                  title="更换照片"
+                  :disabled="licenseUploading"
+                  @click="licenseInputRef?.click()"
+                >
+                  <i class="fas fa-camera"></i>
+                </button>
+              </div>
               <p class="text-xs text-gray-400 mt-1 text-center">医师资格证</p>
             </template>
             <button
@@ -61,6 +79,32 @@
           </div>
         </div>
       </section>
+
+      <!-- 修改医院弹窗 -->
+      <div
+        v-if="showHospitalModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
+        @click.self="closeHospitalModal"
+      >
+        <div class="modal-panel bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+          <h3 class="text-lg font-semibold text-slate-800 mb-4">修改医院</h3>
+          <label class="input-label">医院名称</label>
+          <input
+            v-model="hospitalInput"
+            type="text"
+            maxlength="60"
+            placeholder="请输入所在医院"
+            class="input w-full mb-4"
+            @keyup.enter="saveHospital"
+          />
+          <div class="flex justify-end gap-2">
+            <button class="btn-secondary" @click="closeHospitalModal">取消</button>
+            <button class="btn-primary" :disabled="hospitalSaving" @click="saveHospital">
+              {{ hospitalSaving ? '保存中...' : '保存' }}
+            </button>
+          </div>
+        </div>
+      </div>
 
       <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div class="bg-white rounded-lg shadow-md p-5">
@@ -579,7 +623,7 @@ import {
   setSharedCommunityId,
 } from '../communityShareStore'
 import { currentUser, setStoredUser } from '../lib/auth'
-import { licenseUrl, uploadLicense } from '../api/auth'
+import { licenseUrl, updateProfile, uploadLicense } from '../api/auth'
 import GrowthCurve from '../components/GrowthCurve.vue'
 
 // 术式小类预设(个人项目分组用,也可自由输入自定义名称)
@@ -744,7 +788,38 @@ function openLicenseImage() {
   if (url) window.open(url, '_blank')
 }
 
-// 补传医师资格证:点击"未上传资格证"选图上传,成功后卡片立即切换为缩略图
+// 修改医院:点击"未填写医院"弹出输入框,保存后刷新个人信息卡
+const showHospitalModal = ref(false)
+const hospitalInput = ref('')
+const hospitalSaving = ref(false)
+
+function openHospitalModal() {
+  hospitalInput.value = currentUser.value?.hospital || ''
+  showHospitalModal.value = true
+}
+
+function closeHospitalModal() {
+  showHospitalModal.value = false
+  hospitalSaving.value = false
+}
+
+async function saveHospital() {
+  hospitalSaving.value = true
+  try {
+    const user = await updateProfile({ hospital: hospitalInput.value.trim() })
+    setStoredUser(user)
+    currentUser.value = user
+    showStatus('医院信息已更新', 'success')
+    closeHospitalModal()
+  } catch (error) {
+    showStatus(error?.message || '保存失败，请重试', 'error')
+  } finally {
+    hospitalSaving.value = false
+  }
+}
+
+// 补传/更换医师资格证:点击"未上传资格证"或缩略图上的相机按钮选图,
+// 成功后卡片立即切换为最新缩略图(后端 no-cache 保证不命中旧缓存)
 const licenseInputRef = ref(null)
 const licenseUploading = ref(false)
 const LICENSE_ALLOWED_EXTS = ['.jpg', '.jpeg', '.png', '.webp']

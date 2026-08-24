@@ -56,6 +56,35 @@ export function licenseUrl() {
   return `${API_BASE_URL}/api/auth/license?token=${encodeURIComponent(token)}`
 }
 
+// 修改个人资料(当前仅医院),返回更新后的 user
+export async function updateProfile({ hospital }) {
+  const token = getToken()
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/auth/profile`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ hospital })
+    }
+  )
+
+  const payload = await response
+    .json()
+    .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      payload?.detail || '保存失败，请稍后重试'
+    )
+  }
+
+  return payload
+}
+
 // 补传/更换医师资格证(个人主页"未上传资格证"入口),返回更新后的 user
 export async function uploadLicense(file) {
   const token = getToken()
