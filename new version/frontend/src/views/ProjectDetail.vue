@@ -59,15 +59,6 @@
               <i class="fas mr-2" :class="isFollowing ? 'fa-user-check' : 'fa-user-plus'"></i>
               {{ isFollowing ? '已关注' : '关注作者' }}
             </button>
-            <button
-              v-if="!isSelf"
-              class="btn-primary"
-              :disabled="downloading"
-              @click="handleDownload"
-            >
-              <i class="fas mr-2" :class="downloading ? 'fa-circle-notch fa-spin' : 'fa-download'"></i>
-              {{ downloading ? '打包中...' : '下载项目' }}
-            </button>
           </div>
         </div>
 
@@ -395,7 +386,6 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   askProjectQuestion,
-  downloadProjectExport,
   getProject,
   getUserProfile,
   followUser,
@@ -412,7 +402,6 @@ const router = useRouter()
 const project = ref(null)
 const loading = ref(true)
 const isFollowing = ref(false)
-const downloading = ref(false)
 const videoRef = ref(null)
 const videoError = ref('')
 const isSelf = computed(() => project.value && currentUser.value?.id === project.value.author.id)
@@ -651,20 +640,6 @@ async function toggleFollow() {
     showStatus(next ? '已关注作者' : '已取消关注')
   } catch (error) {
     showStatus(error.message || '操作失败', 'error')
-  }
-}
-
-async function handleDownload() {
-  downloading.value = true
-  try {
-    const filename = await downloadProjectExport(project.value.id)
-    showStatus(
-      filename.endsWith('.zip') ? '项目打包(含视频)已开始下载' : '项目数据已开始下载'
-    )
-  } catch (error) {
-    showStatus(error.message || '下载失败，请稍后重试', 'error')
-  } finally {
-    downloading.value = false
   }
 }
 

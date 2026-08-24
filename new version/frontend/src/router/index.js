@@ -9,7 +9,6 @@ import ProjectDetail from '../views/ProjectDetail.vue'
 import PostDetail from '../views/PostDetail.vue'
 import MyCommunity from '../views/MyCommunity.vue'
 import AuthorProfile from '../views/AuthorProfile.vue'
-import Downloads from '../views/Downloads.vue'
 import Feedback from '../views/Feedback.vue'
 
 import { getToken } from '../lib/auth'
@@ -80,14 +79,6 @@ const routes = [
     path: '/community/users/:id',
     name: 'AuthorProfile',
     component: AuthorProfile,
-    meta: {
-      requiresAuth: true
-    }
-  },
-  {
-    path: '/community/downloads',
-    name: 'Downloads',
-    component: Downloads,
     meta: {
       requiresAuth: true
     }

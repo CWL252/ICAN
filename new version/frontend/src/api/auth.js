@@ -15,20 +15,24 @@ export function handleUnauthorized() {
 export async function register({
   username,
   email,
-  password
+  password,
+  hospital,
+  licenseFile
 }) {
+  // 二期:注册改 multipart(医院 + 医师资格证必填)。FormData 由浏览器
+  // 自动携带 boundary,不能手动设 Content-Type。
+  const form = new FormData()
+  form.append('username', username)
+  form.append('email', email)
+  form.append('password', password)
+  form.append('hospital', hospital)
+  form.append('license_file', licenseFile)
+
   const response = await fetch(
     `${API_BASE_URL}/api/auth/register`,
     {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        username,
-        email,
-        password
-      })
+      body: form
     }
   )
 
@@ -43,6 +47,13 @@ export async function register({
   }
 
   return payload
+}
+
+// 医师资格证图片地址:<img> 无法带 Authorization 头,走 query token
+export function licenseUrl() {
+  const token = getToken()
+  if (!token) return ''
+  return `${API_BASE_URL}/api/auth/license?token=${encodeURIComponent(token)}`
 }
 
 export async function login({

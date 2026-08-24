@@ -201,13 +201,6 @@ export function projectVideoUrl(projectId) {
   return `${API_BASE_URL}/api/community/projects/${encodeURIComponent(projectId)}/video?token=${encodeURIComponent(token)}`
 }
 
-// 视频附件下载：download=1 让浏览器保存文件而不是播放
-export function projectVideoDownloadUrl(projectId) {
-  const token = getToken()
-  if (!token) return ''
-  return `${API_BASE_URL}/api/community/projects/${encodeURIComponent(projectId)}/video?token=${encodeURIComponent(token)}&download=1`
-}
-
 // 下载整个项目：有视频时后端打包 ZIP(项目信息 JSON + 视频)，无视频返回 JSON
 export async function downloadProjectExport(projectId) {
   const token = ensureLogin()
@@ -257,16 +250,6 @@ export function getFeed(limit = 20) {
 
 export function listMyFollowing() {
   return request('/api/community/me/following')
-}
-
-export function listMyDownloads() {
-  return request('/api/community/me/downloads')
-}
-
-export function deleteDownload(projectId) {
-  return request(`/api/community/me/downloads/${encodeURIComponent(projectId)}`, {
-    method: 'DELETE',
-  })
 }
 
 // ---------------------------------------------------------------- feedback

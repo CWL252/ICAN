@@ -262,20 +262,11 @@ def _init_db() -> None:
         db.execute(
             "CREATE INDEX IF NOT EXISTS idx_follows_followee ON follows (followee_id)"
         )
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS downloads (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                project_id INTEGER NOT NULL REFERENCES community_projects(id) ON DELETE CASCADE,
-                created_at TEXT DEFAULT (datetime('now')),
-                UNIQUE (user_id, project_id)
-            )
-            """
-        )
-        db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_downloads_user ON downloads (user_id)"
-        )
+        # 二期:下载中心整体下线,删除 downloads 表(无其他表引用,历史记录无需保留)
+        if db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='downloads'"
+        ).fetchone():
+            db.execute("DROP TABLE downloads")
 
         # 用户反馈:type 反馈类型,status 处理状态,reply 管理员回复(暂由平台方在库中维护)
         db.execute(
@@ -891,7 +882,6 @@ def delete_project_video(
 def stream_project_video(
     project_id: int,
     token: str = Query(default=None),
-    download: bool = Query(default=False),
 ):
     """Stream a shared video to any logged-in user.
 
@@ -899,8 +889,7 @@ def stream_project_video(
     query parameter. FileResponse handles HTTP Range requests natively, which
     keeps seeking and scrubbing working in the HTML5 player.
 
-    download=1 switches to Content-Disposition: attachment so the browser
-    saves the file instead of playing it.
+    二期起只支持在线播放(Content-Disposition: inline),不再提供下载。
     """
     with auth_db() as db:
         user = _get_user_by_token(db, token) if token else None
@@ -927,7 +916,7 @@ def stream_project_video(
         path,
         media_type="video/mp4",
         filename=file_name,
-        content_disposition_type="attachment" if download else "inline",
+        content_disposition_type="inline",
     )
 
 
@@ -996,17 +985,6 @@ def export_project(
         },
     }
 
-    # 记录下载历史(同一项目重复下载刷新时间，显示在下载中心)。
-    # 自己的项目本地本来就有，不算"从社区下载"，不记录。
-    if row["user_id"] != user["id"]:
-        with _db() as db:
-            db.execute(
-                "INSERT INTO downloads (user_id, project_id) VALUES (?, ?) "
-                "ON CONFLICT(user_id, project_id) "
-                "DO UPDATE SET created_at = datetime('now')",
-                (user["id"], project_id),
-            )
-
     video_path = (
         _video_file(project_id, row["video_file_name"])
         if row["video_file_name"]
@@ -1043,65 +1021,6 @@ def export_project(
             "Content-Disposition": f'attachment; filename="project_{project_id}.json"'
         },
     )
-
-
-@router.get("/me/downloads")
-def my_downloads(
-    user: Dict[str, Any] = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """下载中心：当前用户下载过的项目列表(含视频大小)。"""
-    with _db() as db:
-        rows = db.execute(
-            """
-            SELECT d.project_id, d.created_at AS downloaded_at,
-                   p.title, p.user_id AS author_id, u.username AS author,
-                   p.video_file_name,
-                   (SELECT COUNT(*) FROM likes l
-                    WHERE l.target_type='project' AND l.target_id = d.project_id) AS like_count,
-                   (SELECT COUNT(*) FROM favorites f
-                    WHERE f.target_type='project' AND f.target_id = d.project_id) AS favorite_count
-            FROM downloads d
-            JOIN community_projects p ON p.id = d.project_id
-            JOIN users u ON u.id = p.user_id
-            WHERE d.user_id = ?
-            ORDER BY d.created_at DESC
-            """,
-            (user["id"],),
-        ).fetchall()
-        items = []
-        for r in rows:
-            video_size = 0
-            if r["video_file_name"]:
-                path = _video_file(r["project_id"], r["video_file_name"])
-                if path.exists():
-                    video_size = path.stat().st_size
-            items.append(
-                {
-                    "projectId": r["project_id"],
-                    "title": r["title"],
-                    "author": {"id": r["author_id"], "username": r["author"]},
-                    "downloadedAt": r["downloaded_at"],
-                    "hasVideo": bool(r["video_file_name"]),
-                    "videoSize": video_size,
-                    "likeCount": r["like_count"],
-                    "favoriteCount": r["favorite_count"],
-                }
-            )
-    return {"items": items}
-
-
-@router.delete("/me/downloads/{project_id}")
-def delete_download(
-    project_id: int,
-    user: Dict[str, Any] = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """删除一条下载记录(不影响已经下载到电脑的文件)。"""
-    with _db() as db:
-        db.execute(
-            "DELETE FROM downloads WHERE user_id = ? AND project_id = ?",
-            (user["id"], project_id),
-        )
-    return {"message": "下载记录已删除"}
 
 
 # ---------------------------------------------------------------- feedback

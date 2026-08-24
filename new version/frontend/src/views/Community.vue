@@ -31,9 +31,6 @@
         {{ tab.label }}
       </button>
       <div class="ml-auto flex gap-2">
-        <router-link to="/community/downloads" class="tab-button tab-button-mine">
-          <i class="fas fa-download mr-2"></i>下载中心
-        </router-link>
         <router-link to="/community/mine" class="tab-button tab-button-mine">
           <i class="fas fa-user-shield mr-2"></i>我的社区
         </router-link>
@@ -171,14 +168,6 @@
                 <i class="fas fa-comment-dots"></i>
                 <span>{{ project.commentCount }}</span>
               </span>
-              <button
-                v-if="project.author.id !== currentUser?.id"
-                class="engagement-button"
-                title="下载项目(含视频)"
-                @click.stop="downloadProject(project)"
-              >
-                <i class="fas fa-download"></i>
-              </button>
             </div>
             <span class="text-xs text-slate-400">{{ formatDate(project.createdAt) }}</span>
           </div>
@@ -365,7 +354,6 @@ import { useRouter } from 'vue-router'
 import { currentUser } from '../lib/auth'
 import {
   createPost,
-  downloadProjectExport,
   listCategories,
   listMyFollowing,
   listPosts,
@@ -546,17 +534,6 @@ async function togglePostFavorite(post) {
 
 function openProject(project) {
   router.push(`/community/projects/${project.id}`)
-}
-
-async function downloadProject(project) {
-  try {
-    const filename = await downloadProjectExport(project.id)
-    showStatus(
-      filename.endsWith('.zip') ? '项目打包(含视频)已开始下载' : '项目数据已开始下载'
-    )
-  } catch (error) {
-    showStatus(error.message || '下载失败，请稍后重试', 'error')
-  }
 }
 
 function openPost(post) {

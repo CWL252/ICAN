@@ -8,14 +8,45 @@
     </transition>
 
     <section class="bg-white rounded-lg shadow-md p-6 mb-6">
-      <div class="flex justify-between items-center flex-wrap gap-4">
-        <div>
-          <h1 class="text-3xl font-bold text-gray-800 mb-2">视频项目首页</h1>
-          <p class="text-gray-600">集中查看所有视频分析项目。点击“创建项目”后在弹窗里填写描述并上传视频，创建完成后即可进入对应分析页。</p>
+      <div class="flex items-center gap-5 flex-wrap">
+        <div
+          class="w-16 h-16 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold shrink-0"
+        >
+          {{ (currentUser?.username || '?').charAt(0).toUpperCase() }}
         </div>
-        <button class="btn-primary" @click="openCreateModal">
-          <i class="fas fa-plus mr-2"></i>创建项目
-        </button>
+        <div class="min-w-0">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h1 class="text-2xl font-bold text-gray-800">{{ currentUser?.username || '用户' }}</h1>
+            <button class="btn-primary !py-1.5 !px-3 text-sm" @click="openCreateModal">
+              <i class="fas fa-plus mr-1"></i>创建项目
+            </button>
+          </div>
+          <p class="text-gray-500 text-sm mt-1">{{ currentUser?.email }}</p>
+          <p class="text-gray-500 text-sm mt-1">
+            <i class="fas fa-hospital mr-1 text-blue-400"></i>{{ currentUser?.hospital || '未填写医院' }}
+          </p>
+          <p class="text-gray-500 text-sm mt-1">
+            <i class="fas fa-calendar mr-1 text-slate-400"></i>加入于 {{ formatJoinDate(currentUser?.created_at) }}
+          </p>
+        </div>
+        <div class="ml-auto shrink-0">
+          <template v-if="currentUser?.hasLicense">
+            <img
+              :src="licenseUrl()"
+              alt="医师资格证"
+              class="w-28 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80"
+              title="点击查看大图"
+              @click="openLicenseImage()"
+            />
+            <p class="text-xs text-gray-400 mt-1 text-center">医师资格证</p>
+          </template>
+          <div
+            v-else
+            class="w-28 h-16 rounded-lg border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-xs text-gray-400"
+          >
+            未上传资格证
+          </div>
+        </div>
       </div>
     </section>
 
@@ -25,32 +56,35 @@
         <p class="text-3xl font-bold text-slate-800 mt-2">{{ projects.length }}</p>
       </div>
       <div class="bg-white rounded-lg shadow-md p-5">
-        <p class="text-sm text-gray-500">已填写描述</p>
-        <p class="text-3xl font-bold text-slate-800 mt-2">{{ describedCount }}</p>
+        <p class="text-sm text-gray-500">网络项目</p>
+        <p class="text-3xl font-bold text-sky-600 mt-2">{{ networkProjects.length }}</p>
       </div>
       <div class="bg-white rounded-lg shadow-md p-5">
-        <p class="text-sm text-gray-500">最近更新</p>
-        <p class="text-lg font-bold text-slate-800 mt-2">{{ latestUpdated }}</p>
+        <p class="text-sm text-gray-500">个人手术项目</p>
+        <p class="text-3xl font-bold text-blue-600 mt-2">{{ personalProjects.length }}</p>
       </div>
     </section>
 
-    <section class="bg-white rounded-lg shadow-md p-6">
+    <!-- 网络项目:学习来源,记录观看进度与累计学习时长 -->
+    <section class="bg-white rounded-lg shadow-md p-6 mb-6">
       <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
-        <h2 class="text-xl font-semibold text-gray-800">全部视频项目</h2>
-        <span class="text-sm text-gray-500">点击项目即可直接进入对应的视频分析页</span>
+        <h2 class="text-xl font-semibold text-gray-800">
+          <i class="fas fa-globe mr-2 text-sky-500"></i>网络项目
+        </h2>
+        <span class="text-sm text-gray-500">网络获取的手术教学视频，自动记录学习进度</span>
       </div>
 
-      <div v-if="!projects.length" class="border border-dashed border-slate-300 rounded-lg p-10 text-center text-gray-500">
-        <i class="fas fa-folder-open text-3xl mb-3 text-blue-500"></i>
-        <p class="mb-4">当前还没有视频项目，先创建一个项目并上传手术视频吧。</p>
+      <div v-if="!networkProjects.length" class="border border-dashed border-slate-300 rounded-lg p-8 text-center text-gray-500">
+        <i class="fas fa-globe text-3xl mb-3 text-sky-400"></i>
+        <p class="mb-4">还没有网络来源的项目。创建项目时选择“网络”来源，即可记录你的学习进度。</p>
         <button class="btn-primary" @click="openCreateModal">
-          <i class="fas fa-plus mr-2"></i>创建第一个项目
+          <i class="fas fa-plus mr-2"></i>创建网络项目
         </button>
       </div>
 
       <div v-else class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
         <article
-          v-for="project in projects"
+          v-for="project in networkProjects"
           :key="project.id"
           class="project-card border border-slate-200 rounded-xl p-5 bg-slate-50 hover:bg-white transition-colors cursor-pointer"
           @click="openAnalysis(project)"
@@ -61,11 +95,8 @@
               <p class="text-sm text-slate-500 mt-1">{{ project.procedure || '未填写术式' }}</p>
             </div>
             <span class="flex items-center gap-2 shrink-0">
-              <span
-                v-if="getSharedCommunityId(project.id)"
-                class="text-xs rounded-full px-3 py-1 bg-emerald-100 text-emerald-700"
-              >
-                <i class="fas fa-share-nodes mr-1"></i>已分享
+              <span class="text-xs rounded-full px-3 py-1 bg-sky-100 text-sky-700">
+                <i class="fas fa-globe mr-1"></i>网络
               </span>
               <span
                 class="text-xs rounded-full px-3 py-1"
@@ -76,15 +107,12 @@
             </span>
           </div>
 
-          <div class="grid grid-cols-2 gap-3 text-sm text-slate-600 mt-4">
-            <div>
-              <p class="text-slate-400">术者</p>
-              <p class="font-medium">{{ project.surgeon || '未填写' }}</p>
-            </div>
-            <div>
-              <p class="text-slate-400">上传日期</p>
-              <p class="font-medium">{{ project.date || '未填写' }}</p>
-            </div>
+          <p class="text-sm mt-3 rounded-lg bg-sky-50 text-sky-700 px-3 py-2">
+            <i class="fas fa-book-open mr-1"></i>
+            {{ formatLearningProgress(project.learningProgress) }}
+          </p>
+
+          <div class="grid grid-cols-2 gap-3 text-sm text-slate-600 mt-3">
             <div>
               <p class="text-slate-400">视频文件</p>
               <p class="font-medium break-all">{{ project.fileName || '未上传' }}</p>
@@ -106,22 +134,127 @@
             <button class="btn-secondary" @click.stop="editProject(project)">
               <i class="fas fa-copy mr-2"></i>修改信息
             </button>
-            <button
-              class="btn-secondary"
-              @click.stop="openShareModal(project)"
-            >
-              <i class="fas fa-share-nodes mr-2"></i>
-              {{ getSharedCommunityId(project.id) ? '更新分享' : '分享到社区' }}
-            </button>
-            <button
-              v-if="getSharedCommunityId(project.id)"
-              class="btn-secondary text-red-600"
-              @click.stop="cancelShare(project)"
-            >
-              <i class="fas fa-ban mr-2"></i>取消分享
-            </button>
           </div>
         </article>
+      </div>
+    </section>
+
+    <!-- 个人手术项目:按术式小类分组,同小类多个视频展示成长曲线 -->
+    <section class="bg-white rounded-lg shadow-md p-6">
+      <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+        <h2 class="text-xl font-semibold text-gray-800">
+          <i class="fas fa-user-doctor mr-2 text-blue-500"></i>个人手术项目
+        </h2>
+        <span class="text-sm text-gray-500">按术式小类分组，同一小类多个视频可查看成长曲线</span>
+      </div>
+
+      <div v-if="!personalProjects.length" class="border border-dashed border-slate-300 rounded-lg p-10 text-center text-gray-500">
+        <i class="fas fa-folder-open text-3xl mb-3 text-blue-500"></i>
+        <p class="mb-4">还没有个人手术项目。创建项目时选择“个人”来源并选择术式小类，上传自己的手术视频。</p>
+        <button class="btn-primary" @click="openCreateModal">
+          <i class="fas fa-plus mr-2"></i>创建第一个项目
+        </button>
+      </div>
+
+      <div v-else>
+        <div v-for="group in personalGroups" :key="group.name" class="mb-8 last:mb-0">
+          <div class="flex items-center gap-3 mb-3 flex-wrap">
+            <h3 class="text-lg font-semibold text-slate-800">{{ group.name }}</h3>
+            <span class="text-xs rounded-full px-3 py-1 bg-slate-100 text-slate-600">
+              {{ group.items.length }} 个视频
+            </span>
+            <button
+              v-if="group.items.length >= 2"
+              class="btn-secondary !py-1 !px-3 text-xs"
+              @click="toggleCurve(group.name)"
+            >
+              <i class="fas fa-chart-line mr-1"></i>
+              {{ curveOpen[group.name] ? '收起成长曲线' : '查看成长曲线' }}
+            </button>
+          </div>
+
+          <GrowthCurve
+            v-if="curveOpen[group.name] && group.items.length >= 2"
+            :points="curvePointsFor(group.name)"
+            class="mb-4 bg-white rounded-xl border border-slate-200 p-4"
+          />
+
+          <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
+            <article
+              v-for="project in group.items"
+              :key="project.id"
+              class="project-card border border-slate-200 rounded-xl p-5 bg-slate-50 hover:bg-white transition-colors cursor-pointer"
+              @click="openAnalysis(project)"
+            >
+              <div class="flex justify-between items-start gap-4">
+                <div>
+                  <h3 class="text-lg font-bold text-slate-800">{{ project.title }}</h3>
+                  <p class="text-sm text-slate-500 mt-1">{{ project.procedure || '未填写术式' }}</p>
+                </div>
+                <span class="flex items-center gap-2 shrink-0">
+                  <span
+                    v-if="getSharedCommunityId(project.id)"
+                    class="text-xs rounded-full px-3 py-1 bg-emerald-100 text-emerald-700"
+                  >
+                    <i class="fas fa-share-nodes mr-1"></i>已分享
+                  </span>
+                  <span
+                    class="text-xs rounded-full px-3 py-1"
+                    :class="statusClass(project.status)"
+                  >
+                    {{ project.status || '待分析' }}
+                  </span>
+                </span>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3 text-sm text-slate-600 mt-4">
+                <div>
+                  <p class="text-slate-400">术者</p>
+                  <p class="font-medium">{{ project.surgeon || '未填写' }}</p>
+                </div>
+                <div>
+                  <p class="text-slate-400">上传日期</p>
+                  <p class="font-medium">{{ project.date || '未填写' }}</p>
+                </div>
+                <div>
+                  <p class="text-slate-400">视频文件</p>
+                  <p class="font-medium break-all">{{ project.fileName || '未上传' }}</p>
+                </div>
+                <div>
+                  <p class="text-slate-400">视频时长</p>
+                  <p class="font-medium">{{ project.duration || '待补充' }}</p>
+                </div>
+              </div>
+
+              <p v-if="project.description" class="text-sm text-slate-600 mt-4 line-clamp-3">
+                {{ project.description }}
+              </p>
+
+              <div class="flex gap-3 mt-5 flex-wrap">
+                <button class="btn-secondary" @click.stop="removeProjectItem(project)">
+                  <i class="fas fa-trash mr-2"></i>删除项目
+                </button>
+                <button class="btn-secondary" @click.stop="editProject(project)">
+                  <i class="fas fa-copy mr-2"></i>修改信息
+                </button>
+                <button
+                  class="btn-secondary"
+                  @click.stop="openShareModal(project)"
+                >
+                  <i class="fas fa-share-nodes mr-2"></i>
+                  {{ getSharedCommunityId(project.id) ? '更新分享' : '分享到社区' }}
+                </button>
+                <button
+                  v-if="getSharedCommunityId(project.id)"
+                  class="btn-secondary text-red-600"
+                  @click.stop="cancelShare(project)"
+                >
+                  <i class="fas fa-ban mr-2"></i>取消分享
+                </button>
+              </div>
+            </article>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -137,8 +270,64 @@
           </button>
         </div>
 
+        <div class="p-6 pb-0">
+          <label class="input-label">视频来源 <span class="required-mark">*</span></label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              type="button"
+              class="source-card"
+              :class="form.videoSource === 'personal' ? 'source-card-active' : ''"
+              :disabled="!!editingProjectId"
+              @click="form.videoSource = 'personal'"
+            >
+              <i class="fas fa-user-doctor mr-2 text-blue-500"></i>
+              <span class="font-semibold">个人</span>
+              <span class="block text-xs text-slate-500 mt-1">自己的手术视频，记录成长曲线</span>
+            </button>
+            <button
+              type="button"
+              class="source-card"
+              :class="form.videoSource === 'network' ? 'source-card-active' : ''"
+              :disabled="!!editingProjectId"
+              @click="form.videoSource = 'network'"
+            >
+              <i class="fas fa-globe mr-2 text-sky-500"></i>
+              <span class="font-semibold">网络</span>
+              <span class="block text-xs text-slate-500 mt-1">网络获取的教学视频，记录学习进度</span>
+            </button>
+          </div>
+          <p v-if="editingProjectId" class="text-xs text-slate-400 mt-2">
+            <i class="fas fa-lock mr-1"></i>视频来源创建后不可更改
+          </p>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
           <div class="space-y-4">
+            <div v-if="form.videoSource === 'personal'">
+              <label class="input-label">术式小类 <span class="required-mark">*</span></label>
+              <div class="flex flex-wrap gap-2 mb-2">
+                <button
+                  v-for="preset in SUBCATEGORY_PRESETS"
+                  :key="preset"
+                  type="button"
+                  class="subcategory-chip"
+                  :class="form.subcategory === preset ? 'subcategory-chip-active' : ''"
+                  @click="form.subcategory = preset"
+                >
+                  {{ preset }}
+                </button>
+              </div>
+              <input
+                v-model="form.subcategory"
+                class="input"
+                :class="formErrors.subcategory ? 'input-error' : ''"
+                maxlength="20"
+                placeholder="或输入自定义术式名称"
+                @input="formErrors.subcategory = ''"
+              />
+              <p v-if="formErrors.subcategory" class="field-error">{{ formErrors.subcategory }}</p>
+              <p class="text-xs text-slate-400 mt-1">同一小类上传多个视频后，可查看成长曲线（视频时长越短越熟练）</p>
+            </div>
             <div>
               <label class="input-label">项目名称 <span class="required-mark">*</span></label>
               <input
@@ -326,9 +515,9 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { deleteProject, getProjects, saveProject, setActiveProject } from '../projectStore'
+import { deleteProject, getProjects, saveProject, setActiveProject, updateProjectField } from '../projectStore'
 import { syncRunningProjectsPhaseAnalysis } from '../phaseAnalysisStore'
 import { deleteProjectVideo, getProjectVideo, saveProjectVideo } from '../videoStore'
 import {
@@ -343,6 +532,19 @@ import {
   removeSharedProject,
   setSharedCommunityId,
 } from '../communityShareStore'
+import { currentUser } from '../lib/auth'
+import { licenseUrl } from '../api/auth'
+import GrowthCurve from '../components/GrowthCurve.vue'
+
+// 术式小类预设(个人项目分组用,也可自由输入自定义名称)
+const SUBCATEGORY_PRESETS = [
+  '腹腔镜胆囊切除术',
+  '阑尾切除术',
+  '疝修补术',
+  '胆总管探查术',
+  '肝切除术',
+  '其他',
+]
 
 const router = useRouter()
 const projects = ref([])
@@ -387,8 +589,97 @@ const shareProjectHasVideo = computed(() => {
   return Boolean(project?.hasVideo)
 })
 
-const describedCount = computed(() => projects.value.filter((item) => item.description).length)
-const latestUpdated = computed(() => projects.value[0]?.updatedAtLabel || '暂无')
+// 两类项目与按小类分组(旧项目无 videoSource,由 projectStore 兜底为 personal)
+const networkProjects = computed(() => projects.value.filter((p) => p.videoSource === 'network'))
+const personalProjects = computed(() => projects.value.filter((p) => p.videoSource !== 'network'))
+const personalGroups = computed(() => {
+  const groups = new Map()
+  for (const project of personalProjects.value) {
+    const name = project.subcategory?.trim() || '未分类'
+    if (!groups.has(name)) groups.set(name, [])
+    groups.get(name).push(project)
+  }
+  return Array.from(groups.entries()).map(([name, items]) => ({ name, items }))
+})
+
+// 成长曲线折叠状态(按组名)
+const curveOpen = reactive({})
+
+function toggleCurve(groupName) {
+  curveOpen[groupName] = !curveOpen[groupName]
+}
+
+// 组内按上传时间升序生成曲线点;时长取分析结果 meta,回退解析 duration 字符串
+function curvePointsFor(groupName) {
+  const group = personalGroups.value.find((g) => g.name === groupName)
+  if (!group) return []
+  return group.items
+    .map((p) => {
+      const seconds = durationToSeconds(p)
+      if (seconds === null) return null
+      const time = p.uploadedAt || p.updatedAt || ''
+      return {
+        order: Date.parse(time) || 0,
+        label: formatDateShort(time),
+        durationSeconds: seconds,
+        durationText: formatDuration(seconds),
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.order - b.order)
+}
+
+function durationToSeconds(project) {
+  const meta = project.phaseAnalysis?.result?.meta
+  if (meta && Number.isFinite(Number(meta.durationSeconds)) && Number(meta.durationSeconds) > 0) {
+    return Number(meta.durationSeconds)
+  }
+  return parseDurationToSeconds(project.duration)
+}
+
+// 解析 "mm:ss" / "h:mm:ss" 为秒
+function parseDurationToSeconds(duration) {
+  if (typeof duration !== 'string') return null
+  const parts = duration.trim().split(':')
+  if (parts.length < 2 || parts.length > 3) return null
+  const nums = parts.map((p) => Number(p))
+  if (nums.some((n) => !Number.isFinite(n) || n < 0)) return null
+  let total = 0
+  for (const n of nums) total = total * 60 + n
+  return total > 0 ? total : null
+}
+
+function formatDateShort(time) {
+  if (!time) return ''
+  const d = new Date(time)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function formatJoinDate(createdAt) {
+  if (!createdAt) return '未知'
+  return String(createdAt).slice(0, 10)
+}
+
+function formatLearningProgress(progress) {
+  if (!progress || !Number.isFinite(progress.position)) {
+    return '尚未开始学习'
+  }
+  return `已看 ${formatDuration(progress.position)} · 累计学习 ${formatStudied(progress.studiedSeconds || 0)}`
+}
+
+function formatStudied(totalSeconds) {
+  if (!totalSeconds || totalSeconds <= 0) return '0 分钟'
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  if (hours > 0) return `${hours} 小时 ${minutes} 分`
+  return `${minutes} 分`
+}
+
+function openLicenseImage() {
+  const url = licenseUrl()
+  if (url) window.open(url, '_blank')
+}
 
 function getEmptyForm() {
   return {
@@ -403,6 +694,10 @@ function getEmptyForm() {
     videoUrl: '',
     hasVideo: false,
     status: '草稿',
+    videoSource: 'personal',
+    subcategory: '',
+    uploadedAt: '',
+    learningProgress: null,
   }
 }
 
@@ -518,6 +813,11 @@ async function createProject() {
     showStatus('请先填写必填项：项目名称', 'error')
     return
   }
+  if (form.value.videoSource === 'personal' && !form.value.subcategory.trim()) {
+    formErrors.value.subcategory = '请选择或输入术式小类'
+    showStatus('请先选择或输入术式小类', 'error')
+    return
+  }
   if (durationReadPromise) {
     try {
       form.value.duration = await durationReadPromise
@@ -535,6 +835,8 @@ async function createProject() {
     hasVideo: Boolean(selectedVideoFile.value) || Boolean(form.value.hasVideo),
     videoUrl: '',
     status: selectedVideoFile.value ? '正在上传' : form.value.status,
+    // 成长曲线排序键:创建时落一次,编辑不覆盖
+    uploadedAt: isEditing ? form.value.uploadedAt || now.toISOString() : now.toISOString(),
     updatedAt: now.toISOString(),
     updatedAtLabel: now.toLocaleString('zh-CN'),
   }
@@ -587,6 +889,10 @@ async function editProject(project) {
     phaseAnalysis: project.phaseAnalysis || null,
     instrumentStats: project.instrumentStats || null,
     notes: project.notes || [],
+    videoSource: project.videoSource === 'network' ? 'network' : 'personal',
+    subcategory: project.subcategory || '',
+    uploadedAt: project.uploadedAt || '',
+    learningProgress: project.learningProgress || null,
   }
   editingProjectId.value = project.id
   formErrors.value = { title: '' }
@@ -903,5 +1209,56 @@ onBeforeUnmount(() => {
 .toast-slide-leave-to {
   opacity: 0;
   transform: translate(-50%, -10px);
+}
+
+.source-card {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 14px;
+  color: #334155;
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.source-card:hover:not(:disabled) {
+  border-color: #94a3b8;
+}
+
+.source-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.source-card-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.subcategory-chip {
+  padding: 5px 12px;
+  font-size: 13px;
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.subcategory-chip:hover {
+  border-color: #94a3b8;
+}
+
+.subcategory-chip-active {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #2563eb;
 }
 </style>

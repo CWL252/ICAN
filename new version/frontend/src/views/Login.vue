@@ -71,6 +71,48 @@
   密码需至少 8 位，且同时包含字母和数字
 </p>
 
+        <template v-if="isRegister">
+          <label for="hospital">医院 <span class="required-asterisk">*</span></label>
+
+          <input
+            id="hospital"
+            v-model.trim="hospital"
+            type="text"
+            placeholder="请输入所在医院"
+            maxlength="60"
+            required
+          />
+
+          <label>医师资格证 <span class="required-asterisk">*</span></label>
+
+          <button
+            class="license-picker"
+            type="button"
+            @click="licenseInputRef?.click()"
+          >
+            <i class="fas fa-id-card mr-2"></i>
+            {{ licenseFile ? '重新选择照片' : '上传资格证照片' }}
+          </button>
+          <input
+            ref="licenseInputRef"
+            type="file"
+            accept=".jpg,.jpeg,.png,.webp"
+            class="hidden"
+            @change="onLicenseSelected"
+          />
+
+          <p v-if="licenseFile" class="license-file-name">
+            <i class="fas fa-check-circle mr-1"></i>{{ licenseFile.name }}
+          </p>
+
+          <div v-if="licensePreviewUrl" class="license-preview">
+            <img
+              :src="licensePreviewUrl"
+              alt="医师资格证预览"
+            />
+          </div>
+        </template>
+
         <button
           class="submit-button"
           type="submit"
@@ -130,11 +172,44 @@ const router = useRouter()
 const username = ref('')
 const email = ref('')
 const password = ref('')
+const hospital = ref('')
+const licenseInputRef = ref(null)
+const licenseFile = ref(null)
+const licensePreviewUrl = ref('')
 const loading = ref(false)
 const isRegister = ref(false)
 
 const message = ref('')
 const messageType = ref('success')
+
+const LICENSE_ALLOWED_EXTS = ['.jpg', '.jpeg', '.png', '.webp']
+const LICENSE_MAX_BYTES = 5 * 1024 * 1024
+
+function onLicenseSelected(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  const suffix = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+  if (!LICENSE_ALLOWED_EXTS.includes(suffix)) {
+    messageType.value = 'error'
+    message.value = '资格证仅支持 jpg/jpeg/png/webp 格式'
+    event.target.value = ''
+    return
+  }
+  if (file.size > LICENSE_MAX_BYTES) {
+    messageType.value = 'error'
+    message.value = '资格证大小不能超过 5MB'
+    event.target.value = ''
+    return
+  }
+
+  if (licensePreviewUrl.value) {
+    URL.revokeObjectURL(licensePreviewUrl.value)
+  }
+  licenseFile.value = file
+  licensePreviewUrl.value = URL.createObjectURL(file)
+  message.value = ''
+}
 
 function switchMode() {
   isRegister.value = !isRegister.value
@@ -142,6 +217,15 @@ function switchMode() {
   message.value = ''
   username.value = ''
   password.value = ''
+  hospital.value = ''
+  licenseFile.value = null
+  if (licensePreviewUrl.value) {
+    URL.revokeObjectURL(licensePreviewUrl.value)
+  }
+  licensePreviewUrl.value = ''
+  if (licenseInputRef.value) {
+    licenseInputRef.value.value = ''
+  }
 }
 
 async function handleSubmit() {
@@ -166,10 +250,19 @@ async function handleSubmit() {
 }
 
 async function handleRegister() {
+  if (!hospital.value) {
+    throw new Error('请输入所在医院')
+  }
+  if (!licenseFile.value) {
+    throw new Error('请上传医师资格证照片')
+  }
+
   const { token, user } = await register({
     username: username.value,
     email: email.value,
-    password: password.value
+    password: password.value,
+    hospital: hospital.value,
+    licenseFile: licenseFile.value
   })
 
   setToken(token)
@@ -280,6 +373,54 @@ h1 {
 .auth-form input:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.required-asterisk {
+  color: #dc2626;
+}
+
+.license-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px dashed #93c5fd;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.license-picker:hover {
+  background: #dbeafe;
+}
+
+.license-file-name {
+  margin: -12px 0 14px;
+  font-size: 13px;
+  color: #166534;
+}
+
+.license-preview {
+  margin-bottom: 20px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.license-preview img {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+}
+
+.hidden {
+  display: none;
 }
 
 .submit-button {

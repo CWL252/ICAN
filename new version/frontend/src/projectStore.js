@@ -21,11 +21,34 @@ function migrateLegacyKeys() {
 
 migrateLegacyKeys()
 
+// 二期:视频来源归一化。旧项目无 videoSource(均为本地上传视频),
+// 统一兜底为 'personal'。
+function normalizeProject(project) {
+  return {
+    ...project,
+    videoSource: project.videoSource === 'network' ? 'network' : 'personal'
+  }
+}
+
 export function getProjects() {
   try {
-    return JSON.parse(localStorage.getItem(PROJECTS_KEY) || '[]')
+    return JSON.parse(localStorage.getItem(PROJECTS_KEY) || '[]').map(normalizeProject)
   } catch {
     return []
+  }
+}
+
+// 二期:静默更新单个项目的字段,不置顶、不改 updatedAt。
+// 学习进度每 5s 写盘专用,避免 saveProject 的置顶副作用。
+export function updateProjectField(projectId, patch) {
+  try {
+    const projects = JSON.parse(localStorage.getItem(PROJECTS_KEY) || '[]')
+    const idx = projects.findIndex((item) => item.id === projectId)
+    if (idx === -1) return
+    projects[idx] = { ...projects[idx], ...patch }
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects))
+  } catch {
+    // storage unavailable — ignore
   }
 }
 
@@ -60,7 +83,8 @@ export function setActiveProject(project) {
 
 export function getActiveProject() {
   try {
-    return JSON.parse(sessionStorage.getItem(ACTIVE_PROJECT_KEY) || 'null')
+    const project = JSON.parse(sessionStorage.getItem(ACTIVE_PROJECT_KEY) || 'null')
+    return project ? normalizeProject(project) : null
   } catch {
     return null
   }

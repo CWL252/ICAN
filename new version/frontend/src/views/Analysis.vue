@@ -45,6 +45,8 @@
               @loadedmetadata="onLoadedMetadata"
               @canplay="setCanvasSize"
               @timeupdate="onTimeUpdate"
+              @pause="flushLearningProgress"
+              @ended="flushLearningProgress"
                             v-show="uploadedVideoUrl"
             ></video>
             <img :src="analysisImageSrc" alt="手术视频" class="w-full h-full object-contain" v-show="!uploadedVideoUrl" />
@@ -58,6 +60,19 @@
                 :style="`left: ${point.x}px; top: ${point.y}px`"
               ></span>
             </div>
+          </div>
+
+          <div
+            v-if="isNetworkProject"
+            class="bg-white rounded-lg border border-sky-200 px-4 py-2 text-sm text-slate-600 flex items-center gap-2"
+          >
+            <i class="fas fa-book-open text-sky-500"></i>
+            <span>
+              学习进度：已看
+              <span class="font-semibold text-sky-700">{{ formatTimeLabel(currentTime) }}</span>
+              · 累计学习
+              <span class="font-semibold text-sky-700">{{ formatStudiedText(learningProgress.studiedSeconds) }}</span>
+            </span>
           </div>
 
           <div class="seg-toolbar-external">
@@ -641,7 +656,7 @@ import {
   savePhaseAnnotations,
 } from '../api/phaseAnalysis'
 import { applyPhaseAnalysisToProject, syncProjectPhaseAnalysis } from '../phaseAnalysisStore'
-import { getActiveProject, saveProject, setActiveProject } from '../projectStore'
+import { getActiveProject, saveProject, setActiveProject, updateProjectField } from '../projectStore'
 import { getProjectVideo, saveProjectVideo } from '../videoStore'
 
 const videoFileInput = ref(null)
@@ -1101,6 +1116,47 @@ function onTimeUpdate() {
   currentTime.value = videoEl.value?.currentTime || 0
   syncLoopPlayback()
   if (isTracking.value) updateMaskTracking()
+  trackLearningProgress()
+}
+
+// ---------------------------------------------------------------- 学习进度(仅网络来源项目)
+// 计入累计时长的条件(全部满足):
+//   实际在播放(排除暂停)、非拖拽瞬间(seeking)、非注释片段循环播放(activeLoopRange)、
+//   位置增量 ≤2.5s(拖拽/跳转产生的跳变不计入)。
+// 用位置增量而非墙钟差,规避 setInterval 挂起/切标签页后 timeupdate 停发的问题。
+const isNetworkProject = computed(() => currentProject.value?.videoSource === 'network')
+const learningProgress = ref({ position: 0, studiedSeconds: 0 })
+const lastAccumulatedPosition = ref(0)
+let learningSaveTimer = null
+
+function trackLearningProgress() {
+  if (!isNetworkProject.value) return
+  const video = videoEl.value
+  if (!video) return
+
+  const now = currentTime.value
+  const delta = now - lastAccumulatedPosition.value
+
+  if (!video.paused && !video.seeking && !activeLoopRange.value) {
+    if (delta > 0 && delta <= 2.5) {
+      learningProgress.value.studiedSeconds += delta
+    }
+  }
+  lastAccumulatedPosition.value = now
+
+  // 实时进度展示用,避免每次 timeupdate 触发响应式更新
+  learningProgress.value.position = now
+}
+
+function flushLearningProgress() {
+  if (!isNetworkProject.value || !currentProject.value?.id) return
+  const progress = {
+    position: learningProgress.value.position,
+    studiedSeconds: Math.round(learningProgress.value.studiedSeconds * 10) / 10,
+    updatedAt: new Date().toISOString(),
+  }
+  updateProjectField(currentProject.value.id, { learningProgress: progress })
+  currentProject.value.learningProgress = progress
 }
 
 function syncLoopPlayback() {
@@ -2642,10 +2698,34 @@ onMounted(() => {
       })
   }
 
+  // 学习进度:仅网络来源项目,恢复已存进度并启动 5s 节流写盘
+  if (isNetworkProject.value) {
+    const saved = currentProject.value?.learningProgress
+    learningProgress.value = {
+      position: Number(saved?.position) || 0,
+      studiedSeconds: Number(saved?.studiedSeconds) || 0,
+    }
+    lastAccumulatedPosition.value = currentTime.value
+    learningSaveTimer = window.setInterval(flushLearningProgress, 5000)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+  }
+
   if (maskCanvas.value) maskCtx.value = maskCanvas.value.getContext('2d')
   window.addEventListener('resize', setCanvasSize)
   setCanvasSize()
 })
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'hidden') flushLearningProgress()
+}
+
+function formatStudiedText(totalSeconds) {
+  if (!totalSeconds || totalSeconds <= 0) return '0 分钟'
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  if (hours > 0) return `${hours} 小时 ${minutes} 分`
+  return `${minutes} 分`
+}
 
 onBeforeUnmount(() => {
   stopPhasePolling()
@@ -2661,6 +2741,12 @@ onBeforeUnmount(() => {
     window.clearTimeout(aiReportTimer)
     aiReportTimer = null
   }
+  if (learningSaveTimer) {
+    window.clearInterval(learningSaveTimer)
+    learningSaveTimer = null
+  }
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  flushLearningProgress()
   revokeUploadedVideoUrl()
   window.removeEventListener('resize', setCanvasSize)
   if (videoEl.value) {
