@@ -675,7 +675,7 @@ function curvePointsFor(groupName) {
       const time = p.uploadedAt || p.updatedAt || ''
       return {
         order: Date.parse(time) || 0,
-        time: Date.parse(time) || 0,
+        name: p.title || formatDateShort(time),
         label: formatDateShort(time),
         durationSeconds: seconds,
         durationText: formatDuration(seconds),

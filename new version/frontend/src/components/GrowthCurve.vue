@@ -51,24 +51,18 @@
         r="3.5"
         fill="#2563eb"
       >
-        <title>{{ p.label }} · 时长 {{ p.durationText }}</title>
+        <title>{{ p.name }} · {{ p.label }} · 时长 {{ p.durationText }}</title>
       </circle>
-      <!-- X 轴首末日期标签 -->
+      <!-- X 轴刻度:每个刻度对应一个项目,按上传时间先后排列 -->
       <text
-        :x="plotPoints[0].x"
+        v-for="(p, i) in plotPoints"
+        :key="'x-' + i"
+        :x="p.x"
         :y="H - 8"
         text-anchor="middle"
         class="growth-axis-label"
       >
-        {{ plotPoints[0].label }}
-      </text>
-      <text
-        :x="plotPoints[plotPoints.length - 1].x"
-        :y="H - 8"
-        text-anchor="middle"
-        class="growth-axis-label"
-      >
-        {{ plotPoints[plotPoints.length - 1].label }}
+        {{ displayName(p.name) }}
       </text>
     </svg>
     <p class="growth-hint">
@@ -82,12 +76,18 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  // [{ label: '08-12', time: 1723000000000, durationSeconds: 900, durationText: '15:00' }]
+  // [{ name: '001', label: '08-12', durationSeconds: 900, durationText: '15:00' }]
   points: {
     type: Array,
     default: () => []
   }
 })
+
+// 项目名截断,避免长标题挤占刻度
+function displayName(name) {
+  const s = String(name || '')
+  return s.length > 10 ? `${s.slice(0, 10)}…` : s
+}
 
 const W = 360
 const H = 96
@@ -105,17 +105,14 @@ const plotPoints = computed(() => {
   const dMax = Math.max(...durations)
   const xMid = PAD_L + PLOT_W / 2
   const yMid = PAD_T + PLOT_H / 2
-  // x 轴按真实上传时间线性排布:时间相同则点重合,时间相近则靠拢
-  const times = list.map((p) => Number(p.time) || 0)
-  const tMin = Math.min(...times)
-  const tMax = Math.max(...times)
 
+  // x 轴刻度 = 项目,从左到右按上传时间先后均匀排列(排序由调用方完成)
   return list.map((p, i) => {
     let x
-    if (list.length === 1 || tMax === tMin) {
+    if (list.length === 1) {
       x = xMid
     } else {
-      const t = (times[i] - tMin) / (tMax - tMin)
+      const t = i / (list.length - 1)
       x = PAD_L + t * PLOT_W
     }
     // y 按绝对时长比例(最长时长在顶部,越短越靠上):
