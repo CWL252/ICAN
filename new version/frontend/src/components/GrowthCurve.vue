@@ -102,9 +102,7 @@ const plotPoints = computed(() => {
   const list = props.points
   if (list.length === 0) return []
   const durations = list.map((p) => p.durationSeconds)
-  const dMin = Math.min(...durations)
   const dMax = Math.max(...durations)
-  const span = dMax - dMin
   const xMid = PAD_L + PLOT_W / 2
   const yMid = PAD_T + PLOT_H / 2
   // x 轴按真实上传时间线性排布:时间相同则点重合,时间相近则靠拢
@@ -120,7 +118,9 @@ const plotPoints = computed(() => {
       const t = (times[i] - tMin) / (tMax - tMin)
       x = PAD_L + t * PLOT_W
     }
-    const y = span === 0 ? yMid : PAD_T + (1 - (p.durationSeconds - dMin) / span) * PLOT_H
+    // y 按绝对时长比例(最长时长在顶部,越短越靠上):
+    // 时长几乎相同时曲线自然趋平,不会被归一化放大成斜线
+    const y = dMax > 0 ? PAD_T + (1 - (p.durationSeconds || 0) / dMax) * PLOT_H : yMid
     return { ...p, x, y }
   })
 })
@@ -135,9 +135,9 @@ const gridYs = computed(() => {
   const yMax = Math.max(...ys)
   const yMin = Math.min(...ys)
   const yMid = (yMax + yMin) / 2
-  const durs = props.points.map((p) => p.durationSeconds)
-  const dMin = Math.min(...durs)
-  const dMax = Math.max(...durs)
+  const dMax = Math.max(...props.points.map((p) => p.durationSeconds))
+  // 网格线高度反算对应时长,作为该水平线的刻度标签
+  const dOf = (y) => (dMax > 0 ? dMax * (1 - (y - PAD_T) / PLOT_H) : 0)
   const fmt = (s) => {
     const h = Math.floor(s / 3600)
     const m = Math.floor((s % 3600) / 60)
@@ -146,10 +146,14 @@ const gridYs = computed(() => {
       ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
       : `${m}:${String(sec).padStart(2, '0')}`
   }
+  // 时长几乎相同时三条网格线重叠,只画一条
+  if (yMax - yMin < 4) {
+    return [{ y: yMid, label: fmt(dMax) }]
+  }
   return [
-    { y: yMin, label: fmt(dMax) },
-    { y: yMid, label: fmt((dMax + dMin) / 2) },
-    { y: yMax, label: fmt(dMin) }
+    { y: yMin, label: fmt(dOf(yMin)) },
+    { y: yMid, label: fmt(dOf(yMid)) },
+    { y: yMax, label: fmt(dOf(yMax)) }
   ]
 })
 </script>
