@@ -74,12 +74,9 @@
         <span class="text-sm text-gray-500">网络获取的手术教学视频，按术式小类分组，自动记录学习进度</span>
       </div>
 
-      <div v-if="!networkProjects.length" class="border border-dashed border-slate-300 rounded-lg p-8 text-center text-gray-500">
-        <i class="fas fa-globe text-3xl mb-3 text-sky-400"></i>
-        <p class="mb-4">还没有网络来源的项目。创建项目时选择“网络”来源并选择术式小类，即可记录你的学习进度。</p>
-        <button class="btn-primary" @click="openCreateModal">
-          <i class="fas fa-plus mr-2"></i>创建网络项目
-        </button>
+      <div v-if="!networkProjects.length" class="text-sm text-slate-400">
+        <i class="fas fa-globe mr-1 text-sky-400"></i>
+        暂无网络项目 —— 点“创建项目”选择“网络”来源即可添加
       </div>
 
       <div v-else>
