@@ -68,10 +68,9 @@
           >
             <i class="fas fa-book-open text-sky-500"></i>
             <span>
-              学习进度：已看
-              <span class="font-semibold text-sky-700">{{ formatTimeLabel(currentTime) }}</span>
-              · 累计学习
+              学习进度：
               <span class="font-semibold text-sky-700">{{ formatStudiedText(learningProgress.studiedSeconds) }}</span>
+              （界面停留时间）
             </span>
           </div>
 

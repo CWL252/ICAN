@@ -715,10 +715,10 @@ function formatJoinDate(createdAt) {
 }
 
 function formatLearningProgress(progress) {
-  if (!progress || !Number.isFinite(progress.position)) {
+  if (!progress?.studiedSeconds) {
     return '尚未开始学习'
   }
-  return `已看 ${formatDuration(progress.position)} · 累计学习 ${formatStudied(progress.studiedSeconds || 0)}`
+  return `累计学习 ${formatStudied(progress.studiedSeconds)}`
 }
 
 function formatStudied(totalSeconds) {
