@@ -413,9 +413,6 @@
                   </select>
                 </div>
                 <p v-if="formErrors.subcategory" class="field-error">{{ formErrors.subcategory }}</p>
-                <p class="text-xs text-slate-400 mt-1">
-                  先选大类，再选具体术式。同一小类上传多个视频后，可查看成长曲线（视频时长越短越熟练）
-                </p>
               </template>
               <!-- 网络来源:保持单级小类选择 -->
               <template v-else>
