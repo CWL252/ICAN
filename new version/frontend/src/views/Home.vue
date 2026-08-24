@@ -65,77 +65,88 @@
       </div>
     </section>
 
-    <!-- 网络项目:学习来源,记录观看进度与累计学习时长 -->
+    <!-- 网络项目:按术式小类分组,记录观看进度与累计学习时长 -->
     <section class="bg-white rounded-lg shadow-md p-6 mb-6">
       <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
         <h2 class="text-xl font-semibold text-gray-800">
           <i class="fas fa-globe mr-2 text-sky-500"></i>网络项目
         </h2>
-        <span class="text-sm text-gray-500">网络获取的手术教学视频，自动记录学习进度</span>
+        <span class="text-sm text-gray-500">网络获取的手术教学视频，按术式小类分组，自动记录学习进度</span>
       </div>
 
       <div v-if="!networkProjects.length" class="border border-dashed border-slate-300 rounded-lg p-8 text-center text-gray-500">
         <i class="fas fa-globe text-3xl mb-3 text-sky-400"></i>
-        <p class="mb-4">还没有网络来源的项目。创建项目时选择“网络”来源，即可记录你的学习进度。</p>
+        <p class="mb-4">还没有网络来源的项目。创建项目时选择“网络”来源并选择术式小类，即可记录你的学习进度。</p>
         <button class="btn-primary" @click="openCreateModal">
           <i class="fas fa-plus mr-2"></i>创建网络项目
         </button>
       </div>
 
-      <div v-else class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
-        <article
-          v-for="project in networkProjects"
-          :key="project.id"
-          class="project-card border border-slate-200 rounded-xl p-5 bg-slate-50 hover:bg-white transition-colors cursor-pointer"
-          @click="openAnalysis(project)"
-        >
-          <div class="flex justify-between items-start gap-4">
-            <div>
-              <h3 class="text-lg font-bold text-slate-800">{{ project.title }}</h3>
-              <p class="text-sm text-slate-500 mt-1">{{ project.procedure || '未填写术式' }}</p>
-            </div>
-            <span class="flex items-center gap-2 shrink-0">
-              <span class="text-xs rounded-full px-3 py-1 bg-sky-100 text-sky-700">
-                <i class="fas fa-globe mr-1"></i>网络
-              </span>
-              <span
-                class="text-xs rounded-full px-3 py-1"
-                :class="statusClass(project.status)"
-              >
-                {{ project.status || '待分析' }}
-              </span>
+      <div v-else>
+        <div v-for="group in networkGroups" :key="group.name" class="mb-8 last:mb-0">
+          <div class="flex items-center gap-3 mb-3 flex-wrap">
+            <h3 class="text-lg font-semibold text-slate-800">{{ group.name }}</h3>
+            <span class="text-xs rounded-full px-3 py-1 bg-slate-100 text-slate-600">
+              {{ group.items.length }} 个视频
             </span>
           </div>
 
-          <p class="text-sm mt-3 rounded-lg bg-sky-50 text-sky-700 px-3 py-2">
-            <i class="fas fa-book-open mr-1"></i>
-            {{ formatLearningProgress(project.learningProgress) }}
-          </p>
+          <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
+            <article
+              v-for="project in group.items"
+              :key="project.id"
+              class="project-card border border-slate-200 rounded-xl p-5 bg-slate-50 hover:bg-white transition-colors cursor-pointer"
+              @click="openAnalysis(project)"
+            >
+              <div class="flex justify-between items-start gap-4">
+                <div>
+                  <h3 class="text-lg font-bold text-slate-800">{{ project.title }}</h3>
+                  <p class="text-sm text-slate-500 mt-1">{{ project.procedure || '未填写术式' }}</p>
+                </div>
+                <span class="flex items-center gap-2 shrink-0">
+                  <span class="text-xs rounded-full px-3 py-1 bg-sky-100 text-sky-700">
+                    <i class="fas fa-globe mr-1"></i>网络
+                  </span>
+                  <span
+                    class="text-xs rounded-full px-3 py-1"
+                    :class="statusClass(project.status)"
+                  >
+                    {{ project.status || '待分析' }}
+                  </span>
+                </span>
+              </div>
 
-          <div class="grid grid-cols-2 gap-3 text-sm text-slate-600 mt-3">
-            <div>
-              <p class="text-slate-400">视频文件</p>
-              <p class="font-medium break-all">{{ project.fileName || '未上传' }}</p>
-            </div>
-            <div>
-              <p class="text-slate-400">视频时长</p>
-              <p class="font-medium">{{ project.duration || '待补充' }}</p>
-            </div>
+              <p class="text-sm mt-3 rounded-lg bg-sky-50 text-sky-700 px-3 py-2">
+                <i class="fas fa-book-open mr-1"></i>
+                {{ formatLearningProgress(project.learningProgress) }}
+              </p>
+
+              <div class="grid grid-cols-2 gap-3 text-sm text-slate-600 mt-3">
+                <div>
+                  <p class="text-slate-400">视频文件</p>
+                  <p class="font-medium break-all">{{ project.fileName || '未上传' }}</p>
+                </div>
+                <div>
+                  <p class="text-slate-400">视频时长</p>
+                  <p class="font-medium">{{ project.duration || '待补充' }}</p>
+                </div>
+              </div>
+
+              <p v-if="project.description" class="text-sm text-slate-600 mt-4 line-clamp-3">
+                {{ project.description }}
+              </p>
+
+              <div class="flex gap-3 mt-5 flex-wrap">
+                <button class="btn-secondary" @click.stop="removeProjectItem(project)">
+                  <i class="fas fa-trash mr-2"></i>删除项目
+                </button>
+                <button class="btn-secondary" @click.stop="editProject(project)">
+                  <i class="fas fa-copy mr-2"></i>修改信息
+                </button>
+              </div>
+            </article>
           </div>
-
-          <p v-if="project.description" class="text-sm text-slate-600 mt-4 line-clamp-3">
-            {{ project.description }}
-          </p>
-
-          <div class="flex gap-3 mt-5 flex-wrap">
-            <button class="btn-secondary" @click.stop="removeProjectItem(project)">
-              <i class="fas fa-trash mr-2"></i>删除项目
-            </button>
-            <button class="btn-secondary" @click.stop="editProject(project)">
-              <i class="fas fa-copy mr-2"></i>修改信息
-            </button>
-          </div>
-        </article>
+        </div>
       </div>
     </section>
 
@@ -303,7 +314,7 @@
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
           <div class="space-y-4">
-            <div v-if="form.videoSource === 'personal'">
+            <div>
               <label class="input-label">术式小类 <span class="required-mark">*</span></label>
               <div class="flex flex-wrap gap-2 mb-2">
                 <button
@@ -326,7 +337,13 @@
                 @input="formErrors.subcategory = ''"
               />
               <p v-if="formErrors.subcategory" class="field-error">{{ formErrors.subcategory }}</p>
-              <p class="text-xs text-slate-400 mt-1">同一小类上传多个视频后，可查看成长曲线（视频时长越短越熟练）</p>
+              <p class="text-xs text-slate-400 mt-1">
+                {{
+                  form.videoSource === 'personal'
+                    ? '同一小类上传多个视频后，可查看成长曲线（视频时长越短越熟练）'
+                    : '网络视频按术式小类分组展示'
+                }}
+              </p>
             </div>
             <div>
               <label class="input-label">项目名称 <span class="required-mark">*</span></label>
@@ -601,6 +618,16 @@ const personalGroups = computed(() => {
   }
   return Array.from(groups.entries()).map(([name, items]) => ({ name, items }))
 })
+// 网络项目同样按术式小类分组展示(无成长曲线,学习进度在卡片内)
+const networkGroups = computed(() => {
+  const groups = new Map()
+  for (const project of networkProjects.value) {
+    const name = project.subcategory?.trim() || '未分类'
+    if (!groups.has(name)) groups.set(name, [])
+    groups.get(name).push(project)
+  }
+  return Array.from(groups.entries()).map(([name, items]) => ({ name, items }))
+})
 
 // 成长曲线折叠状态(按组名)
 const curveOpen = reactive({})
@@ -813,7 +840,7 @@ async function createProject() {
     showStatus('请先填写必填项：项目名称', 'error')
     return
   }
-  if (form.value.videoSource === 'personal' && !form.value.subcategory.trim()) {
+  if (!form.value.subcategory.trim()) {
     formErrors.value.subcategory = '请选择或输入术式小类'
     showStatus('请先选择或输入术式小类', 'error')
     return
