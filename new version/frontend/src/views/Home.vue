@@ -388,35 +388,63 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
           <div class="space-y-4">
             <div>
-              <label class="input-label">术式小类 <span class="required-mark">*</span></label>
-              <div class="flex flex-wrap gap-2 mb-2">
-                <button
-                  v-for="preset in SUBCATEGORY_PRESETS"
-                  :key="preset"
-                  type="button"
-                  class="subcategory-chip"
-                  :class="form.subcategory === preset ? 'subcategory-chip-active' : ''"
-                  @click="form.subcategory = preset"
-                >
-                  {{ preset }}
-                </button>
-              </div>
-              <input
-                v-model="form.subcategory"
-                class="input"
-                :class="formErrors.subcategory ? 'input-error' : ''"
-                maxlength="20"
-                placeholder="或输入自定义术式名称"
-                @input="formErrors.subcategory = ''"
-              />
-              <p v-if="formErrors.subcategory" class="field-error">{{ formErrors.subcategory }}</p>
-              <p class="text-xs text-slate-400 mt-1">
-                {{
-                  form.videoSource === 'personal'
-                    ? '同一小类上传多个视频后，可查看成长曲线（视频时长越短越熟练）'
-                    : '网络视频按术式小类分组展示'
-                }}
-              </p>
+              <!-- 个人来源:先选大类(手术专科),再选术式小类,与分享弹窗一致 -->
+              <template v-if="form.videoSource === 'personal'">
+                <label class="input-label">手术分类 <span class="required-mark">*</span></label>
+                <div class="grid grid-cols-2 gap-3">
+                  <select
+                    v-model="form.category"
+                    class="input"
+                    @change="onCreateCategoryChange"
+                  >
+                    <option v-for="group in categoryGroups" :key="group.name" :value="group.name">
+                      {{ group.name }}
+                    </option>
+                  </select>
+                  <select
+                    v-model="form.subcategory"
+                    class="input"
+                    :class="formErrors.subcategory ? 'input-error' : ''"
+                    @change="formErrors.subcategory = ''"
+                  >
+                    <option v-for="sub in createSubcategories" :key="sub" :value="sub">
+                      {{ sub }}
+                    </option>
+                  </select>
+                </div>
+                <p v-if="formErrors.subcategory" class="field-error">{{ formErrors.subcategory }}</p>
+                <p class="text-xs text-slate-400 mt-1">
+                  先选大类，再选具体术式。同一小类上传多个视频后，可查看成长曲线（视频时长越短越熟练）
+                </p>
+              </template>
+              <!-- 网络来源:保持单级小类选择 -->
+              <template v-else>
+                <label class="input-label">术式小类 <span class="required-mark">*</span></label>
+                <div class="flex flex-wrap gap-2 mb-2">
+                  <button
+                    v-for="preset in SUBCATEGORY_PRESETS"
+                    :key="preset"
+                    type="button"
+                    class="subcategory-chip"
+                    :class="form.subcategory === preset ? 'subcategory-chip-active' : ''"
+                    @click="form.subcategory = preset"
+                  >
+                    {{ preset }}
+                  </button>
+                </div>
+                <input
+                  v-model="form.subcategory"
+                  class="input"
+                  :class="formErrors.subcategory ? 'input-error' : ''"
+                  maxlength="20"
+                  placeholder="或输入自定义术式名称"
+                  @input="formErrors.subcategory = ''"
+                />
+                <p v-if="formErrors.subcategory" class="field-error">{{ formErrors.subcategory }}</p>
+                <p class="text-xs text-slate-400 mt-1">
+                  网络视频按术式小类分组展示
+                </p>
+              </template>
             </div>
             <div>
               <label class="input-label">项目名称 <span class="required-mark">*</span></label>
@@ -660,6 +688,16 @@ function onCategoryGroupChange() {
   const subs = currentSubcategories.value
   shareForm.value.subcategory = subs.length ? subs[0] : ''
 }
+
+// 创建弹窗:个人来源两级分类(大类 → 小类),与分享弹窗共用同一套分类数据
+const createSubcategories = computed(() => {
+  const group = categoryGroups.value.find((g) => g.name === form.value.category)
+  return group ? group.items : []
+})
+function onCreateCategoryChange() {
+  const subs = createSubcategories.value
+  form.value.subcategory = subs.length ? subs[0] : ''
+}
 const shareErrors = ref({ title: '' })
 const shareIncludePredictions = ref(false)
 const shareIncludeVideo = ref(true)
@@ -698,7 +736,10 @@ const personalProjects = computed(() => projects.value.filter((p) => p.videoSour
 const personalGroups = computed(() => {
   const groups = new Map()
   for (const project of personalProjects.value) {
-    const name = project.subcategory?.trim() || '未分类'
+    // 按 大类 · 小类 分组,跨大类的同名小类互不混淆;旧项目无大类时只显示小类
+    const cat = project.category?.trim()
+    const sub = project.subcategory?.trim() || '未分类'
+    const name = cat ? `${cat} · ${sub}` : sub
     if (!groups.has(name)) groups.set(name, [])
     groups.get(name).push(project)
   }
@@ -869,6 +910,7 @@ function getEmptyForm() {
     hasVideo: false,
     status: '草稿',
     videoSource: 'personal',
+    category: '',
     subcategory: '',
     uploadedAt: '',
     learningProgress: null,
@@ -987,9 +1029,19 @@ async function createProject() {
     showStatus('请先填写必填项：项目名称', 'error')
     return
   }
+  if (form.value.videoSource !== 'network') {
+    // 个人来源:大类必选(空时兜底为第一个大类,兼容编辑旧项目)
+    if (!form.value.category) {
+      form.value.category = categoryGroups.value[0]?.name || ''
+    }
+    if (!form.value.category) {
+      showStatus('手术分类加载失败，请刷新后重试', 'error')
+      return
+    }
+  }
   if (!form.value.subcategory.trim()) {
-    formErrors.value.subcategory = '请选择或输入术式小类'
-    showStatus('请先选择或输入术式小类', 'error')
+    formErrors.value.subcategory = '请选择术式小类'
+    showStatus('请先选择术式小类', 'error')
     return
   }
   if (durationReadPromise) {
@@ -1064,6 +1116,7 @@ async function editProject(project) {
     instrumentStats: project.instrumentStats || null,
     notes: project.notes || [],
     videoSource: project.videoSource === 'network' ? 'network' : 'personal',
+    category: project.category || '',
     subcategory: project.subcategory || '',
     uploadedAt: project.uploadedAt || '',
     learningProgress: project.learningProgress || null,
