@@ -432,12 +432,88 @@ def me(user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     return user
 
 
+@router.post("/license")
+async def upload_license(
+    license_file: UploadFile = File(...),
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """补传/更换医师资格证(个人主页"未上传资格证"入口)。
+
+    校验与注册一致:扩展名白名单 + 5MB 上限,分块写盘。
+    覆盖写 runtime/uploads/licenses/{user_id}{ext},并删除旧扩展名的
+    残留文件;失败时清理半截文件,不影响 users 行。
+    """
+    suffix = Path(license_file.filename or "").suffix.lower()
+    if suffix not in LICENSE_ALLOWED_EXTS:
+        await license_file.close()
+        raise HTTPException(
+            status_code=400, detail="医师资格证仅支持 jpg/jpeg/png/webp 格式"
+        )
+
+    user_id = user["id"]
+    target = LICENSES_DIR / f"{user_id}{suffix}"
+    written_bytes = 0
+    try:
+        LICENSES_DIR.mkdir(parents=True, exist_ok=True)
+        with target.open("wb") as fh:
+            while True:
+                chunk = await license_file.read(1024 * 1024)
+                if not chunk:
+                    break
+                fh.write(chunk)
+                written_bytes += len(chunk)
+                if written_bytes > LICENSE_MAX_BYTES:
+                    raise HTTPException(
+                        status_code=400, detail="医师资格证大小不能超过 5MB"
+                    )
+    except HTTPException:
+        target.unlink(missing_ok=True)
+        await license_file.close()
+        raise
+    except Exception:
+        target.unlink(missing_ok=True)
+        await license_file.close()
+        raise HTTPException(status_code=500, detail="资格证保存失败,请重试")
+    finally:
+        await license_file.close()
+
+    if written_bytes == 0:
+        target.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="医师资格证文件为空")
+
+    # 覆盖:先删除旧文件(可能扩展名不同),再更新记录
+    old_name = user.get("licenseFile") or ""
+    if old_name and old_name != f"{user_id}{suffix}":
+        (LICENSES_DIR / Path(old_name).name).unlink(missing_ok=True)
+
+    with _db() as db:
+        db.execute(
+            "UPDATE users SET license_file = ? WHERE id = ?",
+            (f"{user_id}{suffix}", user_id),
+        )
+        user_row = db.execute(
+            "SELECT id, username, email, created_at, hospital, license_file "
+            "FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+
+    return {
+        "id": user_row["id"],
+        "username": user_row["username"],
+        "email": user_row["email"],
+        "created_at": user_row["created_at"],
+        "hospital": user_row["hospital"] or "",
+        "licenseFile": user_row["license_file"] or "",
+        "hasLicense": bool(user_row["license_file"]),
+    }
+
+
 @router.get("/license")
 def get_license(token: str = Query(default=None)) -> FileResponse:
     """查看当前用户的医师资格证图片。
 
     <img> 标签无法携带 Authorization 头,因此 token 走 query 参数
-    (与社区视频播放同一模式)。
+    (与社区视频播放同一模式)。no-cache 保证补传后缩略图不命中旧缓存。
     """
     if not token:
         raise HTTPException(status_code=401, detail="登录凭证无效或已过期")
@@ -454,4 +530,5 @@ def get_license(token: str = Query(default=None)) -> FileResponse:
         path,
         media_type=LICENSE_MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream"),
         content_disposition_type="inline",
+        headers={"Cache-Control": "no-cache"},
     )

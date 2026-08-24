@@ -42,12 +42,22 @@
               />
               <p class="text-xs text-gray-400 mt-1 text-center">医师资格证</p>
             </template>
-            <div
+            <button
               v-else
-              class="w-28 h-16 rounded-lg border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-xs text-gray-400"
+              class="w-28 h-16 rounded-lg border border-dashed border-sky-300 bg-sky-50 flex items-center justify-center text-xs text-sky-500 transition hover:bg-sky-100 cursor-pointer"
+              title="点击上传医师资格证"
+              :disabled="licenseUploading"
+              @click="licenseInputRef?.click()"
             >
-              未上传资格证
-            </div>
+              <i class="fas fa-upload mr-1"></i>{{ licenseUploading ? '上传中...' : '未上传资格证' }}
+            </button>
+            <input
+              ref="licenseInputRef"
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp"
+              class="hidden"
+              @change="onLicenseUploaded"
+            />
           </div>
         </div>
       </section>
@@ -568,8 +578,8 @@ import {
   removeSharedProject,
   setSharedCommunityId,
 } from '../communityShareStore'
-import { currentUser } from '../lib/auth'
-import { licenseUrl } from '../api/auth'
+import { currentUser, setStoredUser } from '../lib/auth'
+import { licenseUrl, uploadLicense } from '../api/auth'
 import GrowthCurve from '../components/GrowthCurve.vue'
 
 // 术式小类预设(个人项目分组用,也可自由输入自定义名称)
@@ -732,6 +742,42 @@ function formatStudied(totalSeconds) {
 function openLicenseImage() {
   const url = licenseUrl()
   if (url) window.open(url, '_blank')
+}
+
+// 补传医师资格证:点击"未上传资格证"选图上传,成功后卡片立即切换为缩略图
+const licenseInputRef = ref(null)
+const licenseUploading = ref(false)
+const LICENSE_ALLOWED_EXTS = ['.jpg', '.jpeg', '.png', '.webp']
+const LICENSE_MAX_BYTES = 5 * 1024 * 1024
+
+async function onLicenseUploaded(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  const suffix = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+  if (!LICENSE_ALLOWED_EXTS.includes(suffix)) {
+    showStatus('资格证仅支持 jpg/jpeg/png/webp 格式', 'error')
+    event.target.value = ''
+    return
+  }
+  if (file.size > LICENSE_MAX_BYTES) {
+    showStatus('资格证大小不能超过 5MB', 'error')
+    event.target.value = ''
+    return
+  }
+
+  licenseUploading.value = true
+  try {
+    const user = await uploadLicense(file)
+    setStoredUser(user)
+    currentUser.value = user
+    showStatus('医师资格证上传成功', 'success')
+  } catch (error) {
+    showStatus(error?.message || '资格证上传失败，请重试', 'error')
+  } finally {
+    licenseUploading.value = false
+    event.target.value = ''
+  }
 }
 
 function getEmptyForm() {

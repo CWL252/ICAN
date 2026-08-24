@@ -56,6 +56,36 @@ export function licenseUrl() {
   return `${API_BASE_URL}/api/auth/license?token=${encodeURIComponent(token)}`
 }
 
+// 补传/更换医师资格证(个人主页"未上传资格证"入口),返回更新后的 user
+export async function uploadLicense(file) {
+  const token = getToken()
+  const form = new FormData()
+  form.append('license_file', file)
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/auth/license`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: form
+    }
+  )
+
+  const payload = await response
+    .json()
+    .catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      payload?.detail || '资格证上传失败，请稍后重试'
+    )
+  }
+
+  return payload
+}
+
 export async function login({
   identifier,
   password
