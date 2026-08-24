@@ -1,4 +1,4 @@
-# CholecInsight
+# SurgReview
 
 面向腹腔镜胆囊切除术的视频分析、教学辅助与阶段识别原型项目。
 
@@ -11,7 +11,7 @@
 
 ## 1. 项目简介
 
-CholecInsight 主要聚焦腹腔镜胆囊切除术（LC, Laparoscopic Cholecystectomy）场景，目标是为外科教学、病例复盘和流程分析提供一个可扩展的交互平台。
+SurgReview 主要聚焦腹腔镜胆囊切除术（LC, Laparoscopic Cholecystectomy）场景，目标是为外科教学、病例复盘和流程分析提供一个可扩展的交互平台。
 
 当前版本已经具备以下基础能力：
 
@@ -69,7 +69,7 @@ CholecInsight 主要聚焦腹腔镜胆囊切除术（LC, Laparoscopic Cholecyste
 ## 4. 目录结构
 
 ```text
-CholecInsight/
+SurgReview/
 ├─ assets/                  演示资源
 ├─ backend/                 FastAPI 后端与阶段识别推理逻辑
 │  ├─ app.py                服务入口
@@ -235,9 +235,9 @@ git commit -m "docs(readme): add project onboarding guide"
 
 项目内已经有团队协作的规范文档，建议在开发前统一阅读：
 
-- [docs/Git_Standard.md](/D:/Codex/SrugAI/CholecInsight/docs/Git_Standard.md)
-- [docs/PULL_REQUEST_TEMPLATE.md](/D:/Codex/SrugAI/CholecInsight/docs/PULL_REQUEST_TEMPLATE.md)
-- [docs/API_norm.md](/D:/Codex/SrugAI/CholecInsight/docs/API_norm.md)
+- [docs/Git_Standard.md](docs/Git_Standard.md)
+- [docs/PULL_REQUEST_TEMPLATE.md](docs/PULL_REQUEST_TEMPLATE.md)
+- [docs/API_norm.md](docs/API_norm.md)
 
 如果后续你们准备继续扩展，建议逐步补齐这些文档：
 

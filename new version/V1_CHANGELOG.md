@@ -132,7 +132,7 @@
 
 - 分享模态框新增"**包含手术视频**"复选框（默认勾选，1GB 上限提示）
 - **两步分享**：① 元数据 POST ② 若有视频，从 IndexedDB 取 File → XHR + FormData 上传 → 进度条实时百分比 → 按钮文字"分享中(元数据)… / 上传视频 xx%"
-- "更新分享"走同样流程重新覆盖上传；分享映射存 `communityShareStore.js`（localStorage `surginsight-share-map`，本地项目 id → 社区项目 id，用于"已分享"徽标与联动删除）
+- "更新分享"走同样流程重新覆盖上传；分享映射存 `communityShareStore.js`（localStorage `surgreview-share-map`，本地项目 id → 社区项目 id，用于"已分享"徽标与联动删除）
 - **数据一致性修复**：删除本地项目时若发现分享映射，**自动同步取消社区分享**（后端连带删视频文件），避免孤儿视频；失败则 toast 提示
 
 ### 3.9 API 层（api/community.js，194 行）

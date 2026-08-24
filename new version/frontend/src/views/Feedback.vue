@@ -12,7 +12,7 @@
         <h1 class="text-2xl font-bold text-gray-800">
           <i class="fas fa-bullhorn mr-2 text-blue-600"></i>反馈建议
         </h1>
-        <p class="text-sm text-slate-500 mt-1">你的每一条建议都会帮助 SurgInsight 变得更好</p>
+        <p class="text-sm text-slate-500 mt-1">你的每一条建议都会帮助 SurgReview 变得更好</p>
       </div>
       <router-link to="/community" class="btn-secondary">
         <i class="fas fa-arrow-left mr-2"></i>返回社区

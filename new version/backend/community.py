@@ -719,7 +719,7 @@ def project_qa(
     }
 
     prompt = (
-        "你是 SurgInsight 手术视频分析平台的社区项目问答助手。"
+        "你是 SurgReview 手术视频分析平台的社区项目问答助手。"
         "请根据下面提供的社区共享项目数据回答用户问题,用中文回答,简洁专业。"
         "回答时区分'基于该项目分析'和'通用知识/推断'两部分来源。"
         "项目数据中不存在的信息不要编造;如果项目没有共享视频,不要声称看过视频画面。"
@@ -972,7 +972,7 @@ def export_project(
             phase_data = None
 
     info = {
-        "source": "SurgInsight 开源社区",
+        "source": "SurgReview 开源社区",
         "exportedAt": datetime.now().isoformat(timespec="seconds"),
         "projectId": project_id,
         "title": row["title"],

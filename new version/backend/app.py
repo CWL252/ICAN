@@ -13,7 +13,7 @@ from community import router as community_router
 from llm import call_doubao
 
 
-app = FastAPI(title="SurgInsight Phase Analysis API", version="0.1.0")
+app = FastAPI(title="SurgReview Phase Analysis API", version="0.1.0")
 
 app.include_router(auth_router)
 app.include_router(community_router)

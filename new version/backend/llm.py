@@ -80,7 +80,7 @@ def extract_ark_text(response: Any) -> str:
 
 def build_chat_prompt(question: str, context: Optional[Dict[str, Any]]) -> str:
     return (
-        "You are the intelligent Q&A assistant in the SurgInsight surgical video analysis system. "
+        "You are the intelligent Q&A assistant in the SurgReview surgical video analysis system. "
         "Answer in Chinese. Prioritize the provided current video analysis context, but you may also use general surgical, "
         "medical, and perioperative knowledge when the context is insufficient. Clearly separate evidence from the current "
         "video context and general knowledge or inference. Use labels such as '基于当前视频分析' and '通用知识/推断'. "
