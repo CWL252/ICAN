@@ -7,71 +7,110 @@
       </div>
     </transition>
 
-    <section class="bg-white rounded-lg shadow-md p-6 mb-6">
-      <div class="flex items-center gap-5 flex-wrap">
-        <div
-          class="w-16 h-16 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold shrink-0"
-        >
-          {{ (currentUser?.username || '?').charAt(0).toUpperCase() }}
-        </div>
-        <div class="min-w-0">
-          <div class="flex items-center gap-3 flex-wrap">
-            <h1 class="text-2xl font-bold text-gray-800">{{ currentUser?.username || '用户' }}</h1>
-            <button class="btn-primary !py-1.5 !px-3 text-sm" @click="openCreateModal">
-              <i class="fas fa-plus mr-1"></i>创建项目
-            </button>
-          </div>
-          <p class="text-gray-500 text-sm mt-1">{{ currentUser?.email }}</p>
-          <p class="text-gray-500 text-sm mt-1">
-            <i class="fas fa-hospital mr-1 text-blue-400"></i>{{ currentUser?.hospital || '未填写医院' }}
-          </p>
-          <p class="text-gray-500 text-sm mt-1">
-            <i class="fas fa-calendar mr-1 text-slate-400"></i>加入于 {{ formatJoinDate(currentUser?.created_at) }}
-          </p>
-        </div>
-        <div class="ml-auto shrink-0">
-          <template v-if="currentUser?.hasLicense">
-            <img
-              :src="licenseUrl()"
-              alt="医师资格证"
-              class="w-28 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80"
-              title="点击查看大图"
-              @click="openLicenseImage()"
-            />
-            <p class="text-xs text-gray-400 mt-1 text-center">医师资格证</p>
-          </template>
+    <!-- 入口模式:个人信息 + 统计 + 两大类入口 -->
+    <template v-if="!expandedSection">
+      <section class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div class="flex items-center gap-5 flex-wrap">
           <div
-            v-else
-            class="w-28 h-16 rounded-lg border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-xs text-gray-400"
+            class="w-16 h-16 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold shrink-0"
           >
-            未上传资格证
+            {{ (currentUser?.username || '?').charAt(0).toUpperCase() }}
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-3 flex-wrap">
+              <h1 class="text-2xl font-bold text-gray-800">{{ currentUser?.username || '用户' }}</h1>
+              <button class="btn-primary !py-1.5 !px-3 text-sm" @click="openCreateModal">
+                <i class="fas fa-plus mr-1"></i>创建项目
+              </button>
+            </div>
+            <p class="text-gray-500 text-sm mt-1">{{ currentUser?.email }}</p>
+            <p class="text-gray-500 text-sm mt-1">
+              <i class="fas fa-hospital mr-1 text-blue-400"></i>{{ currentUser?.hospital || '未填写医院' }}
+            </p>
+            <p class="text-gray-500 text-sm mt-1">
+              <i class="fas fa-calendar mr-1 text-slate-400"></i>加入于 {{ formatJoinDate(currentUser?.created_at) }}
+            </p>
+          </div>
+          <div class="ml-auto shrink-0">
+            <template v-if="currentUser?.hasLicense">
+              <img
+                :src="licenseUrl()"
+                alt="医师资格证"
+                class="w-28 rounded-lg border border-slate-200 cursor-pointer hover:opacity-80"
+                title="点击查看大图"
+                @click="openLicenseImage()"
+              />
+              <p class="text-xs text-gray-400 mt-1 text-center">医师资格证</p>
+            </template>
+            <div
+              v-else
+              class="w-28 h-16 rounded-lg border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-xs text-gray-400"
+            >
+              未上传资格证
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-md p-5">
-        <p class="text-sm text-gray-500">项目总数</p>
-        <p class="text-3xl font-bold text-slate-800 mt-2">{{ projects.length }}</p>
-      </div>
-      <div class="bg-white rounded-lg shadow-md p-5">
-        <p class="text-sm text-gray-500">网络项目</p>
-        <p class="text-3xl font-bold text-sky-600 mt-2">{{ networkProjects.length }}</p>
-      </div>
-      <div class="bg-white rounded-lg shadow-md p-5">
-        <p class="text-sm text-gray-500">个人手术项目</p>
-        <p class="text-3xl font-bold text-blue-600 mt-2">{{ personalProjects.length }}</p>
-      </div>
-    </section>
+      <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow-md p-5">
+          <p class="text-sm text-gray-500">项目总数</p>
+          <p class="text-3xl font-bold text-slate-800 mt-2">{{ projects.length }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-5">
+          <p class="text-sm text-gray-500">网络项目</p>
+          <p class="text-3xl font-bold text-sky-600 mt-2">{{ networkProjects.length }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-5">
+          <p class="text-sm text-gray-500">个人手术项目</p>
+          <p class="text-3xl font-bold text-blue-600 mt-2">{{ personalProjects.length }}</p>
+        </div>
+      </section>
 
-    <!-- 网络项目:按术式小类分组,记录观看进度与累计学习时长 -->
-    <section class="bg-white rounded-lg shadow-md p-6 mb-6">
-      <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+      <!-- 分类入口:点击进入对应项目列表 -->
+      <section class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <button class="entry-card" @click="goToSection('network')">
+          <i class="fas fa-globe text-3xl text-sky-500"></i>
+          <div class="min-w-0">
+            <p class="text-lg font-bold text-slate-800">网络项目</p>
+            <p class="text-sm text-slate-500">{{ networkProjects.length }} 个视频 · 自动记录学习进度</p>
+          </div>
+          <i class="fas fa-chevron-right text-slate-300 ml-auto"></i>
+        </button>
+        <button class="entry-card" @click="goToSection('personal')">
+          <i class="fas fa-user-doctor text-3xl text-blue-500"></i>
+          <div class="min-w-0">
+            <p class="text-lg font-bold text-slate-800">个人手术项目</p>
+            <p class="text-sm text-slate-500">{{ personalProjects.length }} 个视频 · 按术式小类分组</p>
+          </div>
+          <i class="fas fa-chevron-right text-slate-300 ml-auto"></i>
+        </button>
+      </section>
+    </template>
+
+    <!-- 列表模式:点击入口进入的独立列表页 -->
+    <template v-else>
+      <div class="flex items-center gap-3 mb-6 flex-wrap">
+        <button class="btn-secondary !py-1.5 !px-3" @click="goHome">
+          <i class="fas fa-arrow-left mr-1"></i>返回个人主页
+        </button>
+        <h1 class="text-2xl font-bold text-gray-800">
+          {{ expandedSection === 'network' ? '网络项目' : '个人手术项目' }}
+        </h1>
+        <span class="text-sm text-gray-400">
+          共 {{ (expandedSection === 'network' ? networkProjects : personalProjects).length }} 个视频
+        </span>
+        <button class="btn-primary !py-1.5 !px-3 ml-auto" @click="openCreateModal">
+          <i class="fas fa-plus mr-1"></i>创建项目
+        </button>
+      </div>
+
+    <!-- 网络项目列表:按术式小类分组,记录观看进度与累计学习时长 -->
+    <section v-if="expandedSection === 'network'" class="bg-white rounded-lg shadow-md p-6">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
         <h2 class="text-xl font-semibold text-gray-800">
           <i class="fas fa-globe mr-2 text-sky-500"></i>网络项目
         </h2>
-        <span class="text-sm text-gray-500">网络获取的手术教学视频，按术式小类分组，自动记录学习进度</span>
       </div>
 
       <div v-if="!networkProjects.length" class="text-sm text-slate-400">
@@ -147,23 +186,12 @@
       </div>
     </section>
 
-    <!-- 个人手术项目:按术式小类分组,同小类多个视频展示成长曲线 -->
-    <section class="bg-white rounded-lg shadow-md p-6">
-      <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+    <!-- 个人手术项目列表:按术式小类分组,同小类多个视频展示成长曲线 -->
+    <section v-else class="bg-white rounded-lg shadow-md p-6">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
         <h2 class="text-xl font-semibold text-gray-800">
           <i class="fas fa-user-doctor mr-2 text-blue-500"></i>个人手术项目
         </h2>
-        <div class="flex items-center gap-3 flex-wrap">
-          <span class="text-sm text-gray-500">按术式小类分组，同一小类多个视频可查看成长曲线</span>
-          <button
-            v-if="personalProjects.length"
-            class="btn-secondary !py-1 !px-3 text-xs"
-            @click="personalExpanded = !personalExpanded"
-          >
-            <i class="fas mr-1" :class="personalExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-            {{ personalExpanded ? '收起项目' : `展开项目（${personalProjects.length}）` }}
-          </button>
-        </div>
       </div>
 
       <div v-if="!personalProjects.length" class="text-sm text-slate-400">
@@ -171,7 +199,7 @@
         暂无个人手术项目 —— 点“创建项目”选择“个人”来源即可添加
       </div>
 
-      <div v-else-if="personalExpanded">
+      <div v-else>
         <div v-for="group in personalGroups" :key="group.name" class="mb-8 last:mb-0">
           <div class="flex items-center gap-3 mb-3 flex-wrap">
             <h3 class="text-lg font-semibold text-slate-800">{{ group.name }}</h3>
@@ -272,6 +300,7 @@
         </div>
       </div>
     </section>
+    </template>
 
     <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
       <div class="modal-panel bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -537,7 +566,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { deleteProject, getProjects, saveProject, setActiveProject, updateProjectField } from '../projectStore'
 import { syncRunningProjectsPhaseAnalysis } from '../phaseAnalysisStore'
 import { deleteProjectVideo, getProjectVideo, saveProjectVideo } from '../videoStore'
@@ -568,10 +597,9 @@ const SUBCATEGORY_PRESETS = [
 ]
 
 const router = useRouter()
+const route = useRoute()
 const projects = ref([])
 const showCreateModal = ref(false)
-// 个人手术项目默认折叠,点“展开项目”才显示小类分组与成长曲线
-const personalExpanded = ref(false)
 const fileInputRef = ref(null)
 const form = ref(getEmptyForm())
 const formErrors = ref({ title: '' })
@@ -611,6 +639,18 @@ const shareProjectHasVideo = computed(() => {
   const project = projects.value.find((item) => item.id === shareProjectId.value)
   return Boolean(project?.hasVideo)
 })
+
+// 列表模式:query.section 为 network/personal 时进入对应列表界面,否则为个人主页入口模式
+const expandedSection = computed(() => {
+  const s = route.query.section
+  return s === 'network' || s === 'personal' ? s : null
+})
+function goToSection(section) {
+  router.push({ query: { section } })
+}
+function goHome() {
+  router.push({ query: {} })
+}
 
 // 两类项目与按小类分组(旧项目无 videoSource,由 projectStore 兜底为 personal)
 const networkProjects = computed(() => projects.value.filter((p) => p.videoSource === 'network'))
@@ -1242,6 +1282,26 @@ onBeforeUnmount(() => {
 .toast-slide-leave-to {
   opacity: 0;
   transform: translate(-50%, -10px);
+}
+
+.entry-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 24px;
+  text-align: left;
+  font-size: 14px;
+  color: #334155;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.entry-card:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
 }
 
 .source-card {
