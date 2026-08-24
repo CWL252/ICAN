@@ -82,7 +82,7 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  // [{ label: '08-12', durationSeconds: 900, durationText: '15:00' }]
+  // [{ label: '08-12', time: 1723000000000, durationSeconds: 900, durationText: '15:00' }]
   points: {
     type: Array,
     default: () => []
@@ -90,11 +90,11 @@ const props = defineProps({
 })
 
 const W = 360
-const H = 160
+const H = 120
 const PAD_L = 46
 const PAD_R = 10
-const PAD_T = 12
-const PAD_B = 26
+const PAD_T = 10
+const PAD_B = 22
 const PLOT_W = W - PAD_L - PAD_R
 const PLOT_H = H - PAD_T - PAD_B
 
@@ -107,13 +107,17 @@ const plotPoints = computed(() => {
   const span = dMax - dMin
   const xMid = PAD_L + PLOT_W / 2
   const yMid = PAD_T + PLOT_H / 2
+  // x 轴按真实上传时间线性排布:时间相同则点重合,时间相近则靠拢
+  const times = list.map((p) => Number(p.time) || 0)
+  const tMin = Math.min(...times)
+  const tMax = Math.max(...times)
 
   return list.map((p, i) => {
     let x
-    if (list.length === 1) {
+    if (list.length === 1 || tMax === tMin) {
       x = xMid
     } else {
-      const t = i / (list.length - 1)
+      const t = (times[i] - tMin) / (tMax - tMin)
       x = PAD_L + t * PLOT_W
     }
     const y = span === 0 ? yMid : PAD_T + (1 - (p.durationSeconds - dMin) / span) * PLOT_H
