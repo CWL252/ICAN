@@ -39,15 +39,28 @@ function withBody(method, body) {
 
 // ---------------------------------------------------------------- projects
 
-export function listProjects({ q = '', sort = 'newest', limit = 20, offset = 0, mine = false, authorId = null } = {}) {
+export function listProjects({ q = '', sort = 'newest', limit = 20, offset = 0, mine = false, authorId = null, category = '', subcategory = '' } = {}) {
   const params = new URLSearchParams({ q, sort, limit, offset })
   if (mine) params.set('mine', 'true')
   if (authorId != null) params.set('author_id', authorId)
+  if (category) params.set('category', category)
+  if (subcategory) params.set('subcategory', subcategory)
   return request(`/api/community/projects?${params.toString()}`)
+}
+
+export function listCategories() {
+  return request('/api/community/categories')
 }
 
 export function getProject(projectId) {
   return request(`/api/community/projects/${encodeURIComponent(projectId)}`)
+}
+
+export function askProjectQuestion(projectId, question) {
+  return request(
+    `/api/community/projects/${encodeURIComponent(projectId)}/qa`,
+    withBody('POST', { question })
+  )
 }
 
 export function shareProject(data) {
@@ -188,6 +201,45 @@ export function projectVideoUrl(projectId) {
   return `${API_BASE_URL}/api/community/projects/${encodeURIComponent(projectId)}/video?token=${encodeURIComponent(token)}`
 }
 
+// 视频附件下载：download=1 让浏览器保存文件而不是播放
+export function projectVideoDownloadUrl(projectId) {
+  const token = getToken()
+  if (!token) return ''
+  return `${API_BASE_URL}/api/community/projects/${encodeURIComponent(projectId)}/video?token=${encodeURIComponent(token)}&download=1`
+}
+
+// 下载整个项目：有视频时后端打包 ZIP(项目信息 JSON + 视频)，无视频返回 JSON
+export async function downloadProjectExport(projectId) {
+  const token = ensureLogin()
+  const response = await fetch(
+    `${API_BASE_URL}/api/community/projects/${encodeURIComponent(projectId)}/export`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+
+  if (response.status === 401) {
+    handleUnauthorized()
+  }
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    throw new Error(payload?.detail || '下载失败，请稍后重试')
+  }
+
+  const blob = await response.blob()
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const match = disposition.match(/filename="?([^";]+)"?/)
+  const filename = match ? match[1] : `project_${projectId}.zip`
+
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+  return filename
+}
+
 // ---------------------------------------------------------------- follows / feed
 
 export function followUser(userId, following) {
@@ -205,4 +257,30 @@ export function getFeed(limit = 20) {
 
 export function listMyFollowing() {
   return request('/api/community/me/following')
+}
+
+export function listMyDownloads() {
+  return request('/api/community/me/downloads')
+}
+
+export function deleteDownload(projectId) {
+  return request(`/api/community/me/downloads/${encodeURIComponent(projectId)}`, {
+    method: 'DELETE',
+  })
+}
+
+// ---------------------------------------------------------------- feedback
+
+export function submitFeedback(data) {
+  return request('/api/community/feedback', withBody('POST', data))
+}
+
+export function listMyFeedback() {
+  return request('/api/community/feedback')
+}
+
+export function deleteFeedback(feedbackId) {
+  return request(`/api/community/feedback/${encodeURIComponent(feedbackId)}`, {
+    method: 'DELETE',
+  })
 }

@@ -1,14 +1,14 @@
 <template>
   <div class="auth-page">
     <div class="auth-card">
-      <div class="brand">CholecInsight</div>
+      <div class="brand">SurgReview</div>
 
       <h1>{{ isRegister ? '创建账户' : '欢迎回来' }}</h1>
 
       <p class="subtitle">
         {{
           isRegister
-            ? '注册 CholecInsight 本地账户'
+            ? '注册 SurgReview 本地账户'
             : '登录以继续使用智慧外科分析平台'
         }}
       </p>

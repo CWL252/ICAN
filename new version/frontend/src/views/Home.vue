@@ -245,6 +245,22 @@
             <p v-if="shareErrors.title" class="field-error">{{ shareErrors.title }}</p>
           </div>
           <div>
+            <label class="input-label">项目分类 <span class="required-mark">*</span></label>
+            <div class="grid grid-cols-2 gap-3">
+              <select v-model="shareForm.category" class="input" @change="onCategoryGroupChange">
+                <option v-for="group in categoryGroups" :key="group.name" :value="group.name">
+                  {{ group.name }}
+                </option>
+              </select>
+              <select v-model="shareForm.subcategory" class="input">
+                <option v-for="sub in currentSubcategories" :key="sub" :value="sub">
+                  {{ sub }}
+                </option>
+              </select>
+            </div>
+            <p class="text-xs text-slate-400 mt-1.5">先选大类，再选具体术式，方便大家在开源广场按分类浏览。</p>
+          </div>
+          <div>
             <label class="input-label">项目描述</label>
             <textarea
               v-model="shareForm.description"
@@ -317,6 +333,7 @@ import { syncRunningProjectsPhaseAnalysis } from '../phaseAnalysisStore'
 import { deleteProjectVideo, getProjectVideo, saveProjectVideo } from '../videoStore'
 import {
   deleteProject as deleteCommunityProject,
+  listCategories,
   shareProject,
   updateProject as updateCommunityProject,
   uploadProjectVideo,
@@ -339,7 +356,17 @@ const statusType = ref('success')
 const editingProjectId = ref('')
 const showShareModal = ref(false)
 const shareProjectId = ref('')
-const shareForm = ref({ title: '', description: '' })
+const shareForm = ref({ title: '', category: '肝胆外科', subcategory: '胆囊切除术', description: '' })
+const categoryGroups = ref([])
+const currentSubcategories = computed(() => {
+  const group = categoryGroups.value.find((g) => g.name === shareForm.value.category)
+  return group ? group.items : []
+})
+
+function onCategoryGroupChange() {
+  const subs = currentSubcategories.value
+  shareForm.value.subcategory = subs.length ? subs[0] : ''
+}
 const shareErrors = ref({ title: '' })
 const shareIncludePredictions = ref(false)
 const shareIncludeVideo = ref(true)
@@ -603,6 +630,8 @@ function openShareModal(project) {
   shareProjectId.value = project.id
   shareForm.value = {
     title: project.title || '',
+    category: '肝胆外科',
+    subcategory: '胆囊切除术',
     description: project.description || '',
   }
   shareErrors.value = { title: '' }
@@ -633,11 +662,14 @@ function buildSharePayload(project) {
       result: clippedResult,
       editedSegments: phaseAnalysis.editedSegments || [],
       instrumentStats: project.instrumentStats || null,
+      report: buildShareReport(project),
     }
   }
 
   return {
     title: shareForm.value.title.trim(),
+    category: shareForm.value.category || '肝胆外科',
+    subcategory: shareForm.value.subcategory || '胆囊切除术',
     procedure: project.procedure || '',
     surgeon: project.surgeon || '',
     department: project.department || '',
@@ -648,6 +680,78 @@ function buildSharePayload(project) {
     status: project.status || '分析完成',
     phaseAnalysis: phasePayload,
   }
+}
+
+// 分享时携带完整 AI 分析报告(总结/关键指标/操作评估/关键问题/改进建议),与本地分析页报告逻辑一致
+function buildShareReport(project) {
+  const result = project.phaseAnalysis?.result || null
+  const steps = result?.steps || []
+  const stepCount = project.phaseAnalysis?.editedSegments?.length || steps.length
+  const instrumentItems = project.instrumentStats?.items || []
+  const statsLoading = project.instrumentStats?.status === 'loading'
+  const hasVideo = Boolean(project.hasVideo)
+  const durationSeconds = result?.meta?.durationSeconds || 0
+
+  // 总结(与本地分析页 reportSummary 一致)
+  const summary = hasVideo
+    ? stepCount
+      ? `已识别 ${stepCount} 个关键步骤，结合器械统计和异常检测结果形成当前报告。`
+      : '视频已加载，可先执行关键步骤分析，报告内容会结合异常检测和器械统计自动汇总。'
+    : '当前项目尚未上传视频，上传后会在这里生成分析摘要。'
+
+  // 关键指标(与本地分析页 reportMetrics 一致)
+  const metrics = [
+    { label: '视频时长', value: formatReportDuration(durationSeconds) },
+    { label: '关键步骤', value: `${stepCount} 个` },
+    { label: '异常检测', value: '待接入' },
+    {
+      label: '器械类型',
+      value: statsLoading ? '统计中' : instrumentItems.length ? `${instrumentItems.length} 类` : '待统计',
+    },
+  ]
+
+  const operationAssessment = hasVideo
+    ? [
+        '胆囊切除流程整体符合腹腔镜胆囊切除术的常规路径，画面推进围绕胆囊牵拉、胆囊三角显露、管道处理和胆囊床分离等关键阶段展开。',
+        steps.length
+          ? `系统已识别 ${steps.length} 个关键步骤，可用于术后复盘和教学定位。`
+          : '关键步骤识别尚未完成，当前操作评估以预设模板展示。',
+        instrumentItems.length
+          ? '器械使用以抓持、分离和电凝相关器械为主，使用频率分布与胆囊切除术常见操作节奏基本一致。'
+          : '器械统计结果尚未完成，暂无法对器械切换节奏进行量化判断。',
+      ]
+    : ['尚未上传视频，暂无法形成操作评估。']
+
+  const keyIssues = hasVideo
+    ? [
+        steps.length
+          ? '关键步骤结果仍需结合原始视频逐段复核，尤其关注胆囊三角显露和夹闭前确认阶段。'
+          : '关键步骤尚未完成识别，阶段性风险点仍需等待模型输出。',
+        statsLoading
+          ? '器械统计仍在进行中，暂不能判断是否存在器械使用时间异常。'
+          : '器械使用频率目前仅反映出现时长，尚不能直接判断操作质量或器械使用合理性。',
+        '当前报告为 AI 分析内容，结论应作为复盘线索，不能替代术者和上级医师的专业判断。',
+      ]
+    : ['当前项目未上传视频，无法定位关键问题。']
+
+  const improvementSuggestions = hasVideo
+    ? [
+        '建议术者在胆囊三角处理阶段持续保持清晰暴露，夹闭或离断前重点复核胆囊管、胆囊动脉及周围组织关系。',
+        '建议在牵拉胆囊颈部和分离胆囊床时控制牵拉力度与电凝范围，减少组织撕裂、热损伤和渗血风险。',
+        '若术中出现烟雾、镜头污染或视野遮挡，应及时清理镜头并恢复稳定视野后再继续关键操作。',
+        '术后复盘时建议重点回看关键步骤时间段，关注夹闭前确认、出血处理、胆囊床分离完整性和器械切换节奏。',
+      ]
+    : ['请先上传手术视频，再生成完整分析报告。']
+
+  return { summary, metrics, operationAssessment, keyIssues, improvementSuggestions }
+}
+
+// 秒 → mm:ss(与本地分析页 formatTimeLabel 一致)
+function formatReportDuration(secondsValue) {
+  const total = Math.max(0, Math.round(Number(secondsValue) || 0))
+  const minutes = Math.floor(total / 60)
+  const seconds = total % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
 async function submitShare() {
@@ -725,6 +829,11 @@ async function cancelShare(project) {
 onMounted(async () => {
   await syncRunningProjectsPhaseAnalysis()
   loadProjects()
+  try {
+    categoryGroups.value = (await listCategories()).groups || categoryGroups.value
+  } catch {
+    // 接口不可用时保留空分组,分享时后端兜底默认分类,不影响主流程
+  }
   syncTimer = window.setInterval(async () => {
     await syncRunningProjectsPhaseAnalysis()
     loadProjects()

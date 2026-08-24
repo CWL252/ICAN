@@ -40,17 +40,35 @@
               >
                 {{ project.status || '分析完成' }}
               </span>
+              <span
+                v-if="project.category"
+                class="text-xs rounded-full px-3 py-1 bg-blue-100 text-blue-700"
+              >
+                <i class="fas fa-tags mr-1"></i
+                >{{ project.subcategory || project.category }}
+              </span>
             </div>
           </div>
-          <button
-            v-if="!isSelf"
-            class="btn-secondary"
-            :class="isFollowing ? 'text-blue-600' : ''"
-            @click="toggleFollow"
-          >
-            <i class="fas mr-2" :class="isFollowing ? 'fa-user-check' : 'fa-user-plus'"></i>
-            {{ isFollowing ? '已关注' : '关注作者' }}
-          </button>
+          <div class="flex items-center gap-2 shrink-0 flex-wrap">
+            <button
+              v-if="!isSelf"
+              class="btn-secondary"
+              :class="isFollowing ? 'text-blue-600' : ''"
+              @click="toggleFollow"
+            >
+              <i class="fas mr-2" :class="isFollowing ? 'fa-user-check' : 'fa-user-plus'"></i>
+              {{ isFollowing ? '已关注' : '关注作者' }}
+            </button>
+            <button
+              v-if="!isSelf"
+              class="btn-primary"
+              :disabled="downloading"
+              @click="handleDownload"
+            >
+              <i class="fas mr-2" :class="downloading ? 'fa-circle-notch fa-spin' : 'fa-download'"></i>
+              {{ downloading ? '打包中...' : '下载项目' }}
+            </button>
+          </div>
         </div>
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm text-slate-600 mt-5">
@@ -76,27 +94,6 @@
           {{ project.description }}
         </p>
 
-        <!-- 共享手术视频 -->
-        <div v-if="project.hasVideo" class="mt-5">
-          <div class="rounded-xl overflow-hidden bg-black">
-            <video
-              ref="videoRef"
-              class="w-full max-h-[420px]"
-              controls
-              playsinline
-              preload="metadata"
-              :src="videoUrl"
-              @error="onVideoError"
-            ></video>
-          </div>
-          <p v-if="videoError" class="text-xs text-red-500 mt-2">
-            <i class="fas fa-triangle-exclamation mr-1"></i>{{ videoError }}
-          </p>
-          <p v-else class="text-xs text-slate-400 mt-2">
-            <i class="fas fa-video mr-1"></i>社区共享视频 · {{ project.videoFileName || '' }}
-          </p>
-        </div>
-
         <div class="flex items-center gap-2 mt-5 pt-4 border-t border-slate-200">
           <button
             class="engagement-button"
@@ -119,8 +116,31 @@
         </div>
       </section>
 
-      <!-- 阶段分析区 -->
-      <section v-if="phaseData?.result" class="bg-white rounded-lg shadow-md p-6">
+      <div class="detail-grid">
+        <div class="detail-main">
+          <!-- 共享手术视频 -->
+          <section v-if="project.hasVideo" class="bg-white rounded-lg shadow-md p-6">
+            <div class="rounded-xl overflow-hidden bg-black">
+              <video
+                ref="videoRef"
+                class="w-full max-h-[480px]"
+                controls
+                playsinline
+                preload="metadata"
+                :src="videoUrl"
+                @error="onVideoError"
+              ></video>
+            </div>
+            <p v-if="videoError" class="text-xs text-red-500 mt-2">
+              <i class="fas fa-triangle-exclamation mr-1"></i>{{ videoError }}
+            </p>
+            <p v-else class="text-xs text-slate-400 mt-2">
+              <i class="fas fa-video mr-1"></i>社区共享视频 · {{ project.videoFileName || '' }}
+            </p>
+          </section>
+
+          <!-- 阶段分析区 -->
+          <section v-if="phaseData?.result" class="bg-white rounded-lg shadow-md p-6">
         <h2 class="text-xl font-semibold text-gray-800 mb-4">
           <i class="fas fa-chart-line mr-2 text-blue-600"></i>阶段分析
         </h2>
@@ -202,10 +222,170 @@
         </div>
       </section>
 
+      <!-- 器械使用统计 -->
+      <section v-if="instrumentItems.length" class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">
+          <i class="fas fa-syringe mr-2 text-blue-600"></i>器械使用统计
+        </h2>
+        <div class="space-y-2">
+          <div
+            v-for="item in instrumentItems"
+            :key="item.key || item.label"
+            class="flex items-center gap-3"
+          >
+            <span class="text-sm text-slate-600 w-32 truncate">{{ item.label }}</span>
+            <div class="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                class="h-full rounded-full"
+                :style="{ width: `${instrumentPercent(item.seconds)}%`, background: instrumentColor(item) }"
+              ></div>
+            </div>
+            <span class="text-sm text-slate-500 w-16 text-right">{{ formatInstrumentTime(item.seconds) }}</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- AI 分析报告 -->
+      <section v-if="report" class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">
+          <i class="fas fa-file-lines mr-2 text-blue-600"></i>AI 分析报告
+        </h2>
+
+        <div v-if="report.summary" class="rounded-xl border border-slate-200 p-4 mb-4">
+          <h3 class="text-sm font-bold text-slate-700 mb-2">
+            <i class="fas fa-align-left mr-1 text-blue-600"></i>总结
+          </h3>
+          <p class="text-sm text-slate-600 leading-relaxed">{{ report.summary }}</p>
+        </div>
+
+        <div
+          v-if="report.metrics?.length"
+          class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4"
+        >
+          <div
+            v-for="metric in report.metrics"
+            :key="metric.label"
+            class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center"
+          >
+            <span class="block text-xs text-slate-500 mb-1">{{ metric.label }}</span>
+            <strong class="block text-lg text-slate-800">{{ metric.value }}</strong>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="rounded-xl border border-slate-200 p-4">
+            <h3 class="text-sm font-bold text-slate-700 mb-2">
+              <i class="fas fa-clipboard-check mr-1 text-emerald-600"></i>操作评估
+            </h3>
+            <ul class="space-y-2">
+              <li
+                v-for="(line, index) in report.operationAssessment || []"
+                :key="index"
+                class="text-sm text-slate-600 leading-relaxed flex gap-2"
+              >
+                <span class="text-emerald-500 mt-0.5">•</span>{{ line }}
+              </li>
+            </ul>
+          </div>
+          <div class="rounded-xl border border-slate-200 p-4">
+            <h3 class="text-sm font-bold text-slate-700 mb-2">
+              <i class="fas fa-triangle-exclamation mr-1 text-amber-600"></i>关键问题
+            </h3>
+            <ul class="space-y-2">
+              <li
+                v-for="(line, index) in report.keyIssues || []"
+                :key="index"
+                class="text-sm text-slate-600 leading-relaxed flex gap-2"
+              >
+                <span class="text-amber-500 mt-0.5">•</span>{{ line }}
+              </li>
+            </ul>
+          </div>
+          <div class="rounded-xl border border-slate-200 p-4">
+            <h3 class="text-sm font-bold text-slate-700 mb-2">
+              <i class="fas fa-lightbulb mr-1 text-blue-600"></i>改进建议
+            </h3>
+            <ul class="space-y-2">
+              <li
+                v-for="(line, index) in report.improvementSuggestions || []"
+                :key="index"
+                class="text-sm text-slate-600 leading-relaxed flex gap-2"
+              >
+                <span class="text-blue-500 mt-0.5">•</span>{{ line }}
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <!-- 评论区 -->
       <section class="bg-white rounded-lg shadow-md p-6">
         <CommentList target-type="project" :target-id="project.id" :can-manage="isSelf" />
       </section>
+      </div>
+
+      <aside class="detail-aside">
+        <!-- 智能问答 -->
+        <section class="qa-side-card">
+            <h2 class="text-xl font-semibold text-gray-800 mb-1">
+              <i class="fas fa-robot mr-2 text-blue-600"></i>智能问答
+            </h2>
+            <p class="text-sm text-slate-400 mb-3">
+              基于该项目的分析数据向 AI 提问，如「这台手术的关键步骤有哪些？」
+            </p>
+            <div ref="qaPanelRef" class="qa-panel">
+              <div
+                v-if="!qaMessages.length"
+                class="text-center flex-1 flex flex-col items-center justify-center"
+              >
+                <i class="fas fa-comments text-3xl mb-3 text-slate-300"></i>
+                <p class="text-slate-400 text-sm">还没有提问，问问 AI 关于这台手术的分析结论吧</p>
+              </div>
+              <div
+                v-for="(msg, index) in qaMessages"
+                :key="index"
+                class="qa-row"
+                :class="msg.role === 'user' ? 'justify-end' : 'justify-start'"
+              >
+                <div class="qa-bubble" :class="msg.role === 'user' ? 'qa-user' : 'qa-ai'">
+                  {{ msg.content }}
+                </div>
+              </div>
+              <div v-if="qaLoading" class="qa-row justify-start">
+                <div class="qa-bubble qa-ai">
+                  <i class="fas fa-circle-notch fa-spin mr-2"></i>AI 思考中…
+                </div>
+              </div>
+            </div>
+            <div class="flex gap-2 mt-3">
+              <input
+                v-model="qaInput"
+                class="input flex-1"
+                placeholder="输入你的问题，回车发送"
+                :disabled="qaLoading"
+                @keyup.enter="sendQuestion"
+              />
+              <button
+                class="btn-primary"
+                :disabled="qaLoading || !qaInput.trim()"
+                @click="sendQuestion"
+              >
+                <i class="fas fa-paper-plane mr-1"></i>发送
+              </button>
+            </div>
+            <div class="flex items-center justify-between mt-2">
+              <p class="text-xs text-slate-400">回答由 AI 生成，医学结论请以专业医师判断为准</p>
+              <button
+                v-if="qaMessages.length"
+                class="text-xs text-slate-400 hover:text-slate-600"
+                @click="qaMessages = []"
+              >
+                清空对话
+              </button>
+            </div>
+          </section>
+        </aside>
+      </div>
     </div>
   </div>
 </template>
@@ -213,7 +393,16 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getProject, getUserProfile, followUser, projectVideoUrl, setFavorite, setLike } from '../api/community'
+import {
+  askProjectQuestion,
+  downloadProjectExport,
+  getProject,
+  getUserProfile,
+  followUser,
+  projectVideoUrl,
+  setFavorite,
+  setLike,
+} from '../api/community'
 import { currentUser } from '../lib/auth'
 import CommentList from '../components/CommentList.vue'
 
@@ -223,6 +412,7 @@ const router = useRouter()
 const project = ref(null)
 const loading = ref(true)
 const isFollowing = ref(false)
+const downloading = ref(false)
 const videoRef = ref(null)
 const videoError = ref('')
 const isSelf = computed(() => project.value && currentUser.value?.id === project.value.author.id)
@@ -280,6 +470,70 @@ function phaseLabelText(key) {
 const phaseData = computed(() => project.value?.phaseData || null)
 const result = computed(() => phaseData.value?.result || {})
 const editedSegments = computed(() => phaseData.value?.editedSegments || [])
+
+// 器械使用统计与 AI 分析报告(分享时携带,旧项目可能没有)
+const instrumentItems = computed(
+  () => project.value?.phaseData?.instrumentStats?.items || []
+)
+const report = computed(() => project.value?.phaseData?.report || null)
+
+function formatInstrumentTime(secondsValue) {
+  const total = Math.max(0, Math.round(Number(secondsValue) || 0))
+  const minutes = Math.floor(total / 60)
+  const seconds = total % 60
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
+function instrumentPercent(secondsValue) {
+  const total = instrumentItems.value.reduce(
+    (sum, item) => sum + (Number(item.seconds) || 0),
+    0
+  )
+  if (!total) return 0
+  return Math.max(2, Math.round(((Number(secondsValue) || 0) / total) * 100))
+}
+
+const INSTRUMENT_COLORS = ['#2563eb', '#16a34a', '#ea580c', '#7c3aed', '#0891b2', '#dc2626', '#ca8a04', '#4f46e5']
+
+function instrumentColor(item) {
+  const index = instrumentItems.value.findIndex((it) => (it.key || it.label) === (item.key || item.label))
+  return INSTRUMENT_COLORS[(index >= 0 ? index : 0) % INSTRUMENT_COLORS.length]
+}
+
+// 智能问答
+const qaMessages = ref([])
+const qaInput = ref('')
+const qaLoading = ref(false)
+const qaPanelRef = ref(null)
+
+function scrollQaToBottom() {
+  requestAnimationFrame(() => {
+    if (qaPanelRef.value) {
+      qaPanelRef.value.scrollTop = qaPanelRef.value.scrollHeight
+    }
+  })
+}
+
+async function sendQuestion() {
+  const question = qaInput.value.trim()
+  if (!question || qaLoading.value) return
+  qaMessages.value.push({ role: 'user', content: question })
+  qaInput.value = ''
+  qaLoading.value = true
+  scrollQaToBottom()
+  try {
+    const data = await askProjectQuestion(project.value.id, question)
+    qaMessages.value.push({ role: 'ai', content: data.answer })
+  } catch (error) {
+    qaMessages.value.push({
+      role: 'ai',
+      content: error.message || 'AI 服务暂时不可用，请稍后再试',
+    })
+  } finally {
+    qaLoading.value = false
+    scrollQaToBottom()
+  }
+}
 
 // 有人工标记片段时按标记片段展示步骤时间线，否则回退到 AI 生成的步骤摘要
 const steps = computed(() => {
@@ -400,6 +654,20 @@ async function toggleFollow() {
   }
 }
 
+async function handleDownload() {
+  downloading.value = true
+  try {
+    const filename = await downloadProjectExport(project.value.id)
+    showStatus(
+      filename.endsWith('.zip') ? '项目打包(含视频)已开始下载' : '项目数据已开始下载'
+    )
+  } catch (error) {
+    showStatus(error.message || '下载失败，请稍后重试', 'error')
+  } finally {
+    downloading.value = false
+  }
+}
+
 onMounted(async () => {
   try {
     const data = await getProject(route.params.id)
@@ -432,6 +700,43 @@ onBeforeUnmount(() => {
   width: 100%;
   max-width: none;
 }
+/* 两栏布局：左侧视频+分析，右侧吸顶智能问答（仿 Analysis 页右侧助手面板） */
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.detail-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.detail-aside {
+  min-width: 0;
+}
+.qa-side-card {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+  padding: 24px;
+}
+@media (min-width: 1024px) {
+  .detail-grid {
+    grid-template-columns: minmax(0, 1fr) 480px;
+  }
+  .detail-aside {
+    position: sticky;
+    top: 88px;
+    height: calc(100vh - 130px);
+    min-height: 420px;
+  }
+}
 .engagement-button {
   display: inline-flex;
   align-items: center;
@@ -459,6 +764,51 @@ onBeforeUnmount(() => {
   color: #d97706;
   background: #fffbeb;
   border-color: #fde68a;
+}
+/* 点赞/收藏图标状态色：未点击灰色，已赞红色，已收藏橙色 */
+.engagement-button i {
+  color: #94a3b8;
+}
+.engagement-button.engagement-on i {
+  color: #e11d48;
+}
+.engagement-button.engagement-fav i {
+  color: #d97706;
+}
+.qa-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+.qa-row {
+  display: flex;
+}
+.qa-bubble {
+  max-width: 78%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.qa-user {
+  background: #2563eb;
+  color: #ffffff;
+  border-bottom-right-radius: 4px;
+}
+.qa-ai {
+  background: #ffffff;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  border-bottom-left-radius: 4px;
 }
 .top-toast {
   position: fixed;

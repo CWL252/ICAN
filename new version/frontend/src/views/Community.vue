@@ -30,9 +30,17 @@
         <i class="fas mr-2" :class="tab.icon"></i>
         {{ tab.label }}
       </button>
-      <router-link to="/community/mine" class="tab-button tab-button-mine ml-auto">
-        <i class="fas fa-user-shield mr-2"></i>我的社区
-      </router-link>
+      <div class="ml-auto flex gap-2">
+        <router-link to="/community/downloads" class="tab-button tab-button-mine">
+          <i class="fas fa-download mr-2"></i>下载中心
+        </router-link>
+        <router-link to="/community/mine" class="tab-button tab-button-mine">
+          <i class="fas fa-user-shield mr-2"></i>我的社区
+        </router-link>
+        <router-link to="/community/feedback" class="tab-button tab-button-mine">
+          <i class="fas fa-bullhorn mr-2"></i>反馈建议
+        </router-link>
+      </div>
     </div>
 
     <!-- Tab 1: 开源广场 -->
@@ -51,6 +59,34 @@
             <option value="popular">最受欢迎</option>
           </select>
         </div>
+      </div>
+
+      <!-- 分类筛选条:大类 + 小类联动 -->
+      <div class="flex items-center gap-2 mb-5 flex-wrap">
+        <label class="flex items-center gap-2 text-sm font-semibold text-slate-600 shrink-0">
+          <i class="fas fa-layer-group text-blue-600"></i>分类
+        </label>
+        <select
+          v-model="categoryFilter"
+          class="input category-select"
+          @change="onCategoryChange"
+        >
+          <option value="">全部</option>
+          <option v-for="group in categoryGroups" :key="group.name" :value="group.name">
+            {{ group.name }}
+          </option>
+        </select>
+        <select
+          v-if="categoryFilter"
+          v-model="subcategoryFilter"
+          class="input category-select"
+          @change="loadProjects()"
+        >
+          <option value="">全部</option>
+          <option v-for="sub in currentGroupItems" :key="sub" :value="sub">
+            {{ sub }}
+          </option>
+        </select>
       </div>
 
       <div v-if="loading" class="py-10 text-center text-gray-400">
@@ -77,6 +113,9 @@
               <h3 class="text-lg font-bold text-slate-800 truncate">{{ project.title }}</h3>
               <p class="text-sm text-slate-500 mt-1 truncate">
                 <i v-if="project.hasVideo" class="fas fa-video text-blue-500 mr-1" title="含共享视频"></i>
+                <span v-if="project.subcategory || project.category" class="category-badge">
+                  {{ project.subcategory || project.category }}
+                </span>
                 {{ project.procedure || '未填写术式' }}
               </p>
             </div>
@@ -121,7 +160,7 @@
               </button>
               <button
                 class="engagement-button"
-                :class="project.favorited ? 'engagement-on' : ''"
+                :class="project.favorited ? 'engagement-favorite-on' : ''"
                 title="收藏"
                 @click.stop="toggleProjectFavorite(project)"
               >
@@ -132,6 +171,14 @@
                 <i class="fas fa-comment-dots"></i>
                 <span>{{ project.commentCount }}</span>
               </span>
+              <button
+                v-if="project.author.id !== currentUser?.id"
+                class="engagement-button"
+                title="下载项目(含视频)"
+                @click.stop="downloadProject(project)"
+              >
+                <i class="fas fa-download"></i>
+              </button>
             </div>
             <span class="text-xs text-slate-400">{{ formatDate(project.createdAt) }}</span>
           </div>
@@ -313,10 +360,13 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { currentUser } from '../lib/auth'
 import {
   createPost,
+  downloadProjectExport,
+  listCategories,
   listMyFollowing,
   listPosts,
   listProjects,
@@ -339,6 +389,18 @@ const submitting = ref(false)
 const projects = ref([])
 const projectSort = ref('newest')
 const searchQuery = ref('')
+const categoryGroups = ref([])
+const categoryFilter = ref('')
+const subcategoryFilter = ref('')
+const currentGroupItems = computed(() => {
+  const group = categoryGroups.value.find((g) => g.name === categoryFilter.value)
+  return group ? group.items : []
+})
+
+function onCategoryChange() {
+  subcategoryFilter.value = ''
+  loadProjects()
+}
 let searchTimer = null
 
 const posts = ref([])
@@ -386,7 +448,12 @@ async function switchTab(key) {
 async function loadProjects() {
   loading.value = true
   try {
-    const data = await listProjects({ q: searchQuery.value, sort: projectSort.value })
+    const data = await listProjects({
+      q: searchQuery.value,
+      sort: projectSort.value,
+      category: categoryFilter.value,
+      subcategory: subcategoryFilter.value,
+    })
     projects.value = data.items || []
   } catch (error) {
     showStatus(error.message || '加载项目列表失败', 'error')
@@ -481,6 +548,17 @@ function openProject(project) {
   router.push(`/community/projects/${project.id}`)
 }
 
+async function downloadProject(project) {
+  try {
+    const filename = await downloadProjectExport(project.id)
+    showStatus(
+      filename.endsWith('.zip') ? '项目打包(含视频)已开始下载' : '项目数据已开始下载'
+    )
+  } catch (error) {
+    showStatus(error.message || '下载失败，请稍后重试', 'error')
+  }
+}
+
 function openPost(post) {
   router.push(`/community/posts/${post.id}`)
 }
@@ -531,8 +609,13 @@ async function submitPost() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   loadProjects()
+  try {
+    categoryGroups.value = (await listCategories()).groups || []
+  } catch {
+    // 分类接口失败不阻塞页面，保留空筛选条
+  }
 })
 
 onBeforeUnmount(() => {
@@ -620,6 +703,39 @@ onBeforeUnmount(() => {
 }
 .engagement-favorite-on {
   color: #d97706;
+}
+/* 点赞/收藏图标状态色：未点击灰色，已赞红色，已收藏橙色 */
+.engagement-button i {
+  color: #94a3b8;
+}
+.engagement-button.engagement-on i {
+  color: #e11d48;
+}
+.engagement-button.engagement-favorite-on i {
+  color: #d97706;
+}
+.category-select {
+  width: auto;
+  min-width: 140px;
+  max-width: 240px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  background-color: #ffffff;
+  cursor: pointer;
+}
+.category-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: #dbeafe;
+  vertical-align: middle;
 }
 .top-toast {
   position: fixed;

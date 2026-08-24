@@ -276,6 +276,16 @@ onBeforeUnmount(() => {
   background: #fffbeb;
   border-color: #fde68a;
 }
+/* 点赞/收藏图标状态色：未点击灰色，已赞红色，已收藏橙色 */
+.engagement-button i {
+  color: #94a3b8;
+}
+.engagement-button.engagement-on i {
+  color: #e11d48;
+}
+.engagement-button.engagement-fav i {
+  color: #d97706;
+}
 .top-toast {
   position: fixed;
   top: 84px;

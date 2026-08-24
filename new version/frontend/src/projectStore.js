@@ -1,5 +1,25 @@
-const PROJECTS_KEY = 'surginsight-projects'
-const ACTIVE_PROJECT_KEY = 'surginsight-active-project'
+const PROJECTS_KEY = 'surgreview-projects'
+const ACTIVE_PROJECT_KEY = 'surgreview-active-project'
+
+// Legacy keys from before the SurgReview rename. Kept so data stored under the
+// old names is migrated once below and never lost.
+const LEGACY_PROJECTS_KEY = 'surginsight-projects'
+const LEGACY_ACTIVE_PROJECT_KEY = 'surginsight-active-project'
+
+function migrateLegacyKeys() {
+  try {
+    if (!localStorage.getItem(PROJECTS_KEY) && localStorage.getItem(LEGACY_PROJECTS_KEY)) {
+      localStorage.setItem(PROJECTS_KEY, localStorage.getItem(LEGACY_PROJECTS_KEY))
+    }
+    if (!sessionStorage.getItem(ACTIVE_PROJECT_KEY) && sessionStorage.getItem(LEGACY_ACTIVE_PROJECT_KEY)) {
+      sessionStorage.setItem(ACTIVE_PROJECT_KEY, sessionStorage.getItem(LEGACY_ACTIVE_PROJECT_KEY))
+    }
+  } catch {
+    // localStorage/sessionStorage unavailable — leave as-is
+  }
+}
+
+migrateLegacyKeys()
 
 export function getProjects() {
   try {
