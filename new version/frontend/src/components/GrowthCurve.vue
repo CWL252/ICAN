@@ -90,11 +90,11 @@ const props = defineProps({
 })
 
 const W = 360
-const H = 120
+const H = 96
 const PAD_L = 46
 const PAD_R = 10
-const PAD_T = 10
-const PAD_B = 22
+const PAD_T = 8
+const PAD_B = 18
 const PLOT_W = W - PAD_L - PAD_R
 const PLOT_H = H - PAD_T - PAD_B
 

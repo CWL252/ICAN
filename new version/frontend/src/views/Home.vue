@@ -208,11 +208,8 @@
             </span>
           </div>
 
-          <!-- 成长曲线:进入列表即展示;≥2 个视频画曲线,1 个时显示提示 -->
-          <GrowthCurve
-            :points="curvePointsFor(group.name)"
-            class="mb-4 bg-white rounded-xl border border-slate-200 p-4"
-          />
+          <!-- 成长曲线:嵌入类别分组,紧凑展示;≥2 个视频画曲线,1 个时显示提示 -->
+          <GrowthCurve :points="curvePointsFor(group.name)" class="mb-3" />
 
           <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
             <article
