@@ -206,18 +206,10 @@
             <span class="text-xs rounded-full px-3 py-1 bg-slate-100 text-slate-600">
               {{ group.items.length }} 个视频
             </span>
-            <button
-              v-if="group.items.length >= 2"
-              class="btn-secondary !py-1 !px-3 text-xs"
-              @click="toggleCurve(group.name)"
-            >
-              <i class="fas fa-chart-line mr-1"></i>
-              {{ curveOpen[group.name] ? '收起成长曲线' : '查看成长曲线' }}
-            </button>
           </div>
 
+          <!-- 成长曲线:进入列表即展示;≥2 个视频画曲线,1 个时显示提示 -->
           <GrowthCurve
-            v-if="curveOpen[group.name] && group.items.length >= 2"
             :points="curvePointsFor(group.name)"
             class="mb-4 bg-white rounded-xl border border-slate-200 p-4"
           />
@@ -565,7 +557,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { deleteProject, getProjects, saveProject, setActiveProject, updateProjectField } from '../projectStore'
 import { syncRunningProjectsPhaseAnalysis } from '../phaseAnalysisStore'
@@ -674,13 +666,6 @@ const networkGroups = computed(() => {
   }
   return Array.from(groups.entries()).map(([name, items]) => ({ name, items }))
 })
-
-// 成长曲线折叠状态(按组名)
-const curveOpen = reactive({})
-
-function toggleCurve(groupName) {
-  curveOpen[groupName] = !curveOpen[groupName]
-}
 
 // 组内按上传时间升序生成曲线点;时长取分析结果 meta,回退解析 duration 字符串
 function curvePointsFor(groupName) {
