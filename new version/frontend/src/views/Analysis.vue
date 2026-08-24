@@ -1120,32 +1120,30 @@ function onTimeUpdate() {
 }
 
 // ---------------------------------------------------------------- 学习进度(仅网络来源项目)
-// 计入累计时长的条件(全部满足):
-//   实际在播放(排除暂停)、非拖拽瞬间(seeking)、非注释片段循环播放(activeLoopRange)、
-//   位置增量 ≤2.5s(拖拽/跳转产生的跳变不计入)。
-// 用位置增量而非墙钟差,规避 setInterval 挂起/切标签页后 timeupdate 停发的问题。
+// 统计口径 = 在本分析界面停留的时间(墙钟采样,与视频是否播放无关):
+//   进入页面即开始累计,暂停播放、查看面板同样计入。
+//   页面切走/挂起(visibilitychange→hidden 已 flush)期间无采样,
+//   回来后墙钟跳变(>5s)不累计,避免把离开页面的时间算进学习时长。
 const isNetworkProject = computed(() => currentProject.value?.videoSource === 'network')
 const learningProgress = ref({ position: 0, studiedSeconds: 0 })
-const lastAccumulatedPosition = ref(0)
+let lastWallClockMs = 0
 let learningSaveTimer = null
+let wallClockTimer = null
 
 function trackLearningProgress() {
   if (!isNetworkProject.value) return
-  const video = videoEl.value
-  if (!video) return
 
-  const now = currentTime.value
-  const delta = now - lastAccumulatedPosition.value
-
-  if (!video.paused && !video.seeking && !activeLoopRange.value) {
-    if (delta > 0 && delta <= 2.5) {
-      learningProgress.value.studiedSeconds += delta
+  const now = Date.now()
+  if (lastWallClockMs > 0) {
+    const deltaSec = (now - lastWallClockMs) / 1000
+    if (deltaSec > 0 && deltaSec <= 5) {
+      learningProgress.value.studiedSeconds += deltaSec
     }
   }
-  lastAccumulatedPosition.value = now
+  lastWallClockMs = now
 
-  // 实时进度展示用,避免每次 timeupdate 触发响应式更新
-  learningProgress.value.position = now
+  // 实时进度展示用(视频播放位置)
+  learningProgress.value.position = currentTime.value
 }
 
 function flushLearningProgress() {
@@ -2698,15 +2696,17 @@ onMounted(() => {
       })
   }
 
-  // 学习进度:仅网络来源项目,恢复已存进度并启动 5s 节流写盘
+  // 学习进度:仅网络来源项目。恢复已存进度,启动 1s 墙钟采样(界面停留时间)
+  // 与 5s 节流写盘;timeupdate 里也会调用 trackLearningProgress,幂等累计。
   if (isNetworkProject.value) {
     const saved = currentProject.value?.learningProgress
     learningProgress.value = {
       position: Number(saved?.position) || 0,
       studiedSeconds: Number(saved?.studiedSeconds) || 0,
     }
-    lastAccumulatedPosition.value = currentTime.value
+    lastWallClockMs = Date.now()
     learningSaveTimer = window.setInterval(flushLearningProgress, 5000)
+    wallClockTimer = window.setInterval(trackLearningProgress, 1000)
     document.addEventListener('visibilitychange', onVisibilityChange)
   }
 
@@ -2740,6 +2740,10 @@ onBeforeUnmount(() => {
   if (aiReportTimer) {
     window.clearTimeout(aiReportTimer)
     aiReportTimer = null
+  }
+  if (wallClockTimer) {
+    window.clearInterval(wallClockTimer)
+    wallClockTimer = null
   }
   if (learningSaveTimer) {
     window.clearInterval(learningSaveTimer)
