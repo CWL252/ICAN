@@ -153,18 +153,25 @@
         <h2 class="text-xl font-semibold text-gray-800">
           <i class="fas fa-user-doctor mr-2 text-blue-500"></i>个人手术项目
         </h2>
-        <span class="text-sm text-gray-500">按术式小类分组，同一小类多个视频可查看成长曲线</span>
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="text-sm text-gray-500">按术式小类分组，同一小类多个视频可查看成长曲线</span>
+          <button
+            v-if="personalProjects.length"
+            class="btn-secondary !py-1 !px-3 text-xs"
+            @click="personalExpanded = !personalExpanded"
+          >
+            <i class="fas mr-1" :class="personalExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            {{ personalExpanded ? '收起项目' : `展开项目（${personalProjects.length}）` }}
+          </button>
+        </div>
       </div>
 
-      <div v-if="!personalProjects.length" class="border border-dashed border-slate-300 rounded-lg p-10 text-center text-gray-500">
-        <i class="fas fa-folder-open text-3xl mb-3 text-blue-500"></i>
-        <p class="mb-4">还没有个人手术项目。创建项目时选择“个人”来源并选择术式小类，上传自己的手术视频。</p>
-        <button class="btn-primary" @click="openCreateModal">
-          <i class="fas fa-plus mr-2"></i>创建第一个项目
-        </button>
+      <div v-if="!personalProjects.length" class="text-sm text-slate-400">
+        <i class="fas fa-user-doctor mr-1 text-blue-400"></i>
+        暂无个人手术项目 —— 点“创建项目”选择“个人”来源即可添加
       </div>
 
-      <div v-else>
+      <div v-else-if="personalExpanded">
         <div v-for="group in personalGroups" :key="group.name" class="mb-8 last:mb-0">
           <div class="flex items-center gap-3 mb-3 flex-wrap">
             <h3 class="text-lg font-semibold text-slate-800">{{ group.name }}</h3>
@@ -563,6 +570,8 @@ const SUBCATEGORY_PRESETS = [
 const router = useRouter()
 const projects = ref([])
 const showCreateModal = ref(false)
+// 个人手术项目默认折叠,点“展开项目”才显示小类分组与成长曲线
+const personalExpanded = ref(false)
 const fileInputRef = ref(null)
 const form = ref(getEmptyForm())
 const formErrors = ref({ title: '' })
