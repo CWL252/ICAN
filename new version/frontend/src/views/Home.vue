@@ -208,8 +208,8 @@
             </span>
           </div>
 
-          <!-- 成长曲线:嵌入类别分组,紧凑展示;≥2 个视频画曲线,1 个时显示提示 -->
-          <GrowthCurve :points="curvePointsFor(group.name)" class="mb-3" />
+          <!-- 成长曲线:与项目卡片同宽,紧凑展示;≥2 个视频画曲线,1 个时显示提示 -->
+          <GrowthCurve :points="curvePointsFor(group.name)" class="mb-3 max-w-[450px]" />
 
           <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
             <article
