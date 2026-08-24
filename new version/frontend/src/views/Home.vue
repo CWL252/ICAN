@@ -88,7 +88,7 @@
       </section>
     </template>
 
-    <!-- 列表模式:点击入口进入的独立列表页 -->
+    <!-- 列表模式:点击入口进入的独立列表页(创建项目统一在个人主页入口) -->
     <template v-else>
       <div class="flex items-center gap-3 mb-6 flex-wrap">
         <button class="btn-secondary !py-1.5 !px-3" @click="goHome">
@@ -100,9 +100,6 @@
         <span class="text-sm text-gray-400">
           共 {{ (expandedSection === 'network' ? networkProjects : personalProjects).length }} 个视频
         </span>
-        <button class="btn-primary !py-1.5 !px-3 ml-auto" @click="openCreateModal">
-          <i class="fas fa-plus mr-1"></i>创建项目
-        </button>
       </div>
 
     <!-- 网络项目列表:按术式小类分组,记录观看进度与累计学习时长 -->
