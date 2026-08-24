@@ -34,6 +34,15 @@
     <div class="analysis-workspace-card bg-white rounded-lg shadow-md p-6">
       <div class="analysis-main-grid">
         <div class="analysis-video-column space-y-4">
+          <div
+            v-if="isNetworkProject"
+            class="bg-white rounded-lg border border-sky-200 px-4 py-2 text-sm text-slate-600 flex items-center gap-2"
+          >
+            <i class="fas fa-book-open text-sky-500"></i>
+            <span>学习进度：</span>
+            <span class="font-semibold text-sky-700">{{ formatStudiedText(learningProgress.studiedSeconds) }}</span>
+          </div>
+
           <div class="video-container" ref="videoContainer" @click="onVideoContainerClick">
             <video
               ref="videoEl"
@@ -59,19 +68,6 @@
                 :class="point.kind === 'positive' ? 'point-positive' : 'point-negative'"
                 :style="`left: ${point.x}px; top: ${point.y}px`"
               ></span>
-            </div>
-          </div>
-
-          <div
-            v-if="isNetworkProject"
-            class="bg-white rounded-lg border border-sky-200 px-4 py-2 text-sm text-slate-600"
-          >
-            <div class="flex items-center gap-2 text-xs text-slate-500">
-              <i class="fas fa-book-open text-sky-500"></i>
-              <span>学习进度</span>
-            </div>
-            <div class="mt-0.5 font-semibold text-sky-700">
-              {{ formatStudiedText(learningProgress.studiedSeconds) }}
             </div>
           </div>
 
